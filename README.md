@@ -43,7 +43,7 @@ struct ContentView: View {
                 placeholder: "E.g. \"Onboarding felt much clearer\""
             )
         ],
-        developerProfileImageURL: URL(string: "https://your-cdn.dev/profile.jpg"),
+        developerProfileImageURL: URL(string: "https://your-cdn.dev/profile.jpg"), // can be your GitHub profile picture if you'd like
         allowsFeedbackPasteboardExport: true,
         feedbackContextProvider: {
             [
