@@ -91,6 +91,9 @@ public final class BetaContentViewModel {
             Self.scheduleTestFlightScreenshotTipNotificationInternal()
         }
         #endif
+        if !hasSeenTestFlightScreenshotTip {
+            showTestFlightScreenshotTip = true
+        }
     }
     
     public func authorizationStatus() async -> UNAuthorizationStatus {
