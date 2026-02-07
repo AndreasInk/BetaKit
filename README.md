@@ -5,15 +5,14 @@ BetaKit is an open source SwiftUI package focused on one job: helping TestFlight
 ## Why BetaKit
 Many testers want to help but skip feedback because it is too much work in the moment. BetaKit adds lightweight prompts and screenshot-aware nudges so users can submit useful feedback quickly.
 
-![RocketSim_Recording_iPhone_17_6 3_2026-02-06_23 11 41](https://github.com/user-attachments/assets/121f08ec-bf31-4d40-a0b3-dd5c2083667d)
-
+https://github.com/user-attachments/assets/df578175-e59d-4e6d-a626-9c5ac92e43aa
 
 ## Current capabilities
 - TestFlight feedback prompt sheet with rotating daily question
 - Screenshot tip flow to guide users to TestFlight's built-in feedback path
-- Hotswappable analytics sink via `AnalyticsManager.configure`
-- Optional copy-to-pasteboard button for response + context sharing
-- SwiftUI-first API that can be embedded in existing views
+- Customize prompts per screenshotted view for faster feedback
+- Hotswappable analytics sink (Optional copy-to-pasteboard button for response + context sharing)
+- SwiftUI-first API that can be embedded in existing views or use the `.beta` modifier
 
 ## Requirements
 - iOS 17+
@@ -95,9 +94,6 @@ In your app's URL router:
 ```
 
 When using local notifications, route tap actions into these deep links (or call `handleDeepLink` directly) so the expected `BetaKit` sheet appears.
-
-## Project goal
-Build a reusable SwiftUI package that increases both the quantity and quality of TestFlight feedback for indie and small app teams.
 
 ## Development
 ```bash
