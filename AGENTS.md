@@ -11,7 +11,7 @@ BetaKit is an open source SwiftUI package that helps TestFlight beta testers sha
 
 ## Repository basics
 - Package name: `BetaKit`
-- Main source target: `Sources/BetaKIt`
+- Main source target: `Sources/BetaKit`
 - Tests: `Tests/BetaKItTests`
 - Minimum platforms:
   - iOS 17+
