@@ -49,6 +49,7 @@ struct TestFlightScreenshotTipView: View {
                     Text("Got it")
                         .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(BetaButtonStyle())
             }
             .padding(.horizontal, 24)
             .padding(.top, 28)

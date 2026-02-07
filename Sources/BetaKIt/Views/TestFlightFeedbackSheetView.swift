@@ -70,6 +70,7 @@ struct TestFlightFeedbackSheetView: View {
                     } label: {
                         Label("Submit", systemImage: "paperplane.fill")
                     }
+                    .buttonStyle(BetaButtonStyle())
                     .disabled(answerTrimmed.isEmpty)
 
                     if vm.allowsFeedbackPasteboardExport {

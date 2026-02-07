@@ -74,6 +74,25 @@ struct ContentView: View {
 You can leave `feedbackQuestions` unset to use `TestFlightFeedbackQuestion.defaultQuestions`.
 If `developerProfileImageURL` is set, sheets will render your remote profile image next to the app icon.
 
+## Deep links for sheet presentation
+`BetaKit` supports deep links so host apps can open sheets from notification taps, debug tools, or internal routing.
+
+Supported hosts:
+- `yourapp://beta-feedback` opens the TestFlight feedback question sheet.
+- `yourapp://beta-screenshot-tip` opens the screenshot guidance sheet.
+
+In your app's URL router:
+```swift
+.onOpenURL { url in
+    if viewModel.handleDeepLink(url) {
+        return
+    }
+    // Handle your other app links.
+}
+```
+
+When using local notifications, route tap actions into these deep links (or call `handleDeepLink` directly) so the expected `BetaKit` sheet appears.
+
 ## Project goal
 Build a reusable SwiftUI package that increases both the quantity and quality of TestFlight feedback for indie and small app teams.
 
@@ -82,6 +101,31 @@ Build a reusable SwiftUI package that increases both the quantity and quality of
 swift build
 swift test
 ```
+
+## Foreground notification behavior (important)
+`BetaKit` schedules local notifications for screenshot tips and daily feedback prompts. If your app is active, iOS can suppress visible banners unless your app opts in to foreground presentation.
+
+In your host app:
+1. Set `UNUserNotificationCenter.current().delegate`.
+2. Implement `userNotificationCenter(_:willPresent:withCompletionHandler:)`.
+3. Return presentation options like `.banner`, `.list`, and `.sound`.
+
+Example:
+```swift
+import UserNotifications
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
+    }
+}
+```
+
+Without this, screenshot-tip notifications may be scheduled but not visibly shown while your app stays open.
 
 ## License
 MIT

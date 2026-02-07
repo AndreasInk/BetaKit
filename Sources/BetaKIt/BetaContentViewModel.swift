@@ -56,6 +56,30 @@ public final class BetaContentViewModel {
         self.feedbackContextProvider = feedbackContextProvider
     }
 
+    public enum DeepLink {
+        public static let feedbackHost = "beta-feedback"
+        public static let screenshotTipHost = "beta-screenshot-tip"
+    }
+
+    @discardableResult
+    public func handleDeepLink(_ url: URL) -> Bool {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+              let host = components.host else {
+            return false
+        }
+
+        switch host {
+        case DeepLink.feedbackHost:
+            showTestFlightFeedbackPrompt = true
+            return true
+        case DeepLink.screenshotTipHost:
+            showTestFlightScreenshotTip = true
+            return true
+        default:
+            return false
+        }
+    }
+
     public func setup() {
         #if os(iOS)
         NotificationCenter.default.addObserver(
@@ -152,9 +176,9 @@ public final class BetaContentViewModel {
 
     private static func screenshotTipBody() -> String {
         if #available(iOS 26.0, *) {
-            return "After the screenshot, tap the check mark → Share Beta Feedback."
+            return "Tap the check mark → Share Beta Feedback."
         }
-        return "After the screenshot, tap Done → Share Beta Feedback."
+        return "Tap Done → Share Beta Feedback."
     }
 
     @discardableResult
