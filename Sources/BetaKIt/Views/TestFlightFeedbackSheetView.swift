@@ -162,7 +162,7 @@ private extension TestFlightFeedbackSheetView {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Thank you for testing this :)")
                     .font(.title3.weight(.semibold))
-                Text("This is mostly shared with friends, so your quick feedback really helps.")
+                Text("Your quick feedback really helps.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
