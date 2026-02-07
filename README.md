@@ -10,7 +10,7 @@ Many testers want to help but skip feedback because it is too much work in the m
 ## Current capabilities
 - TestFlight feedback prompt sheet with rotating daily question
 - Screenshot tip flow to guide users to TestFlight's built-in feedback path
-- Customize prompts per screenshotted view for faster feedback
+- Customize prompts per screenshotted view for better / faster feedback
 - Hotswappable analytics sink (Optional copy-to-pasteboard button for response + context sharing)
 - SwiftUI-first API that can be embedded in existing views or use the `.beta` modifier
 
