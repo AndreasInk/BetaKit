@@ -5,7 +5,7 @@ BetaKit is an open source SwiftUI package focused on one job: helping TestFlight
 ## Why BetaKit
 Many testers want to help but skip feedback because it is too much work in the moment. BetaKit adds lightweight prompts and screenshot-aware nudges so users can submit useful feedback quickly.
 
-<img width="8288" height="7168" alt="image" src="https://github.com/user-attachments/assets/8f2f9b4f-d0e7-475f-b0c7-0cf197832cba" />
+<img width="6880" height="3584" alt="image" src="https://github.com/user-attachments/assets/9bd2e16a-a7fa-483a-8515-95f2b942c3b8" />
 
 ## Current capabilities
 - TestFlight feedback prompt sheet with rotating daily question
