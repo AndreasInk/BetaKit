@@ -24,9 +24,9 @@ struct TestFlightScreenshotTipView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Quick beta tip")
+                    Text("Thank you for testing :)")
                         .font(.title3.weight(.semibold))
-                    Text("When you take a screenshot, iOS lets you share beta feedback directly. I’ll send a reminder after your next screenshot.")
+                    Text("When you take a screenshot, iOS lets you share beta feedback directly. I’ll send a reminder after your next screenshot in the app.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
