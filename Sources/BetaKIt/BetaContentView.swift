@@ -11,7 +11,7 @@ public struct BetaContentView<Content: View>: View {
     
     @Bindable var viewModel: BetaContentViewModel
     
-    var backgroundMaterial: Material
+    var backgroundMaterial: Material?
     var backgroundCardView: Content
     var foregroundCardStyle: Color = Color.white
     var screenshotPromptTitle: String
@@ -19,9 +19,8 @@ public struct BetaContentView<Content: View>: View {
     var triggerAction: (() -> Void)?
     
     
-    
     public init(viewModel: BetaContentViewModel,
-                backgroundMaterial: Material,
+                backgroundMaterial: Material?,
                 foregroundCardStyle: Color = Color.white,
                 screenshotPromptTitle: String = "Want to share quick beta feedback?",
                 screenshotPromptSubtitle: String = "Take a screenshot and we’ll guide you from there.",
@@ -38,9 +37,13 @@ public struct BetaContentView<Content: View>: View {
     public var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottomLeading) {
-                Rectangle()
-                    .foregroundStyle(backgroundMaterial)
+                Color.clear
                     .ignoresSafeArea()
+                if let backgroundMaterial {
+                    Rectangle()
+                        .foregroundStyle(backgroundMaterial)
+                        .ignoresSafeArea()
+                }
                 VStack(alignment: .leading, spacing: 8) {
                     Text(screenshotPromptTitle)
                         .font(.headline)

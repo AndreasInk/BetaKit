@@ -3,7 +3,7 @@ import SwiftUI
 public extension View {
     func beta(
         viewModel: BetaContentViewModel,
-        backgroundMaterial: Material = .thickMaterial,
+        backgroundMaterial: Material? = nil,
         foregroundCardStyle: Color = .white,
         screenshotPromptTitle: String = "Want to share quick beta feedback?",
         screenshotPromptSubtitle: String = "Take a screenshot and we’ll guide you from there.",
