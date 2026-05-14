@@ -64,6 +64,41 @@ import Testing
     #expect(vm.feedbackContextProvider()["build"] == "42")
 }
 
+@Test func feedbackDeepLinkReplacesScreenshotTipSheet() {
+    let vm = BetaContentViewModel()
+    vm.showTestFlightScreenshotTip = true
+
+    let handled = vm.handleDeepLink(URL(string: "walklock://\(BetaContentViewModel.DeepLink.feedbackHost)")!)
+
+    #expect(handled)
+    #expect(vm.showTestFlightFeedbackPrompt)
+    #expect(!vm.showTestFlightScreenshotTip)
+    #expect(vm.presentedSheet == .testFlightFeedbackPrompt)
+}
+
+@Test func screenshotTipDeepLinkReplacesFeedbackSheet() {
+    let vm = BetaContentViewModel()
+    vm.showTestFlightFeedbackPrompt = true
+
+    let handled = vm.handleDeepLink(URL(string: "walklock://\(BetaContentViewModel.DeepLink.screenshotTipHost)")!)
+
+    #expect(handled)
+    #expect(vm.showTestFlightScreenshotTip)
+    #expect(!vm.showTestFlightFeedbackPrompt)
+    #expect(vm.presentedSheet == .testFlightScreenshotTip)
+}
+
+@Test func dismissPresentedSheetClearsLegacySheetBooleans() {
+    let vm = BetaContentViewModel()
+    vm.showTestFlightFeedbackPrompt = true
+
+    vm.dismissPresentedSheet()
+
+    #expect(!vm.showTestFlightFeedbackPrompt)
+    #expect(!vm.showTestFlightScreenshotTip)
+    #expect(vm.presentedSheet == nil)
+}
+
 private actor CaptureActor {
     private var _event: String?
     private var _info: [String: String] = [:]

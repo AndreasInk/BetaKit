@@ -15,8 +15,34 @@ import AppKit
 
 @Observable
 public final class BetaContentViewModel {
-    var showTestFlightFeedbackPrompt: Bool = false
-    var showTestFlightScreenshotTip: Bool = false
+    enum PresentedSheet: String, Identifiable {
+        case testFlightFeedbackPrompt
+        case testFlightScreenshotTip
+
+        var id: String { rawValue }
+    }
+
+    var presentedSheet: PresentedSheet?
+    var showTestFlightFeedbackPrompt: Bool {
+        get { presentedSheet == .testFlightFeedbackPrompt }
+        set {
+            if newValue {
+                presentTestFlightFeedbackPrompt()
+            } else if presentedSheet == .testFlightFeedbackPrompt {
+                dismissPresentedSheet()
+            }
+        }
+    }
+    var showTestFlightScreenshotTip: Bool {
+        get { presentedSheet == .testFlightScreenshotTip }
+        set {
+            if newValue {
+                presentTestFlightScreenshotTip()
+            } else if presentedSheet == .testFlightScreenshotTip {
+                dismissPresentedSheet()
+            }
+        }
+    }
     var showScreenshotOverlay: Bool = false
     var hasShownTestFlightFeedbackPrompt: Bool = false
     var testFlightFeedbackAnswer: String = ""
@@ -70,14 +96,27 @@ public final class BetaContentViewModel {
 
         switch host {
         case DeepLink.feedbackHost:
-            showTestFlightFeedbackPrompt = true
+            presentTestFlightFeedbackPrompt()
             return true
         case DeepLink.screenshotTipHost:
-            showTestFlightScreenshotTip = true
+            presentTestFlightScreenshotTip()
             return true
         default:
             return false
         }
+    }
+
+    func presentTestFlightFeedbackPrompt() {
+        showScreenshotOverlay = false
+        presentedSheet = .testFlightFeedbackPrompt
+    }
+
+    func presentTestFlightScreenshotTip() {
+        presentedSheet = .testFlightScreenshotTip
+    }
+
+    func dismissPresentedSheet() {
+        presentedSheet = nil
     }
 
     public func setup() {
@@ -92,7 +131,7 @@ public final class BetaContentViewModel {
         }
         #endif
         if !hasSeenTestFlightScreenshotTip {
-            showTestFlightScreenshotTip = true
+            presentTestFlightScreenshotTip()
         }
     }
     

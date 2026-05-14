@@ -43,7 +43,7 @@ struct TestFlightScreenshotTipView: View {
 
                 Button {
                     vm.setHasSeenTestFlightScreenshotTip(true)
-                    vm.showTestFlightScreenshotTip = false
+                    vm.dismissPresentedSheet()
                     dismiss()
                 } label: {
                     Text("Got it")

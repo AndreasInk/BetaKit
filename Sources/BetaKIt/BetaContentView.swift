@@ -65,13 +65,17 @@ public struct BetaContentView<Content: View>: View {
                 .offset(x: viewModel.showScreenshotOverlay ? 0 : -100)
             }
             .opacity(viewModel.showScreenshotOverlay ? 1 : 0)
-            .sheet(isPresented: $viewModel.showTestFlightFeedbackPrompt) {
-                TestFlightFeedbackSheetView()
-                    .presentationDetents([.medium])
-            }
-            .sheet(isPresented: $viewModel.showTestFlightScreenshotTip) {
-                TestFlightScreenshotTipView()
-                    .presentationDetents([.medium])
+            .sheet(item: presentedSheetBinding) { sheet in
+                switch sheet {
+                case .testFlightFeedbackPrompt:
+                    TestFlightFeedbackSheetView()
+                        .environment(viewModel)
+                        .presentationDetents([.medium])
+                case .testFlightScreenshotTip:
+                    TestFlightScreenshotTipView()
+                        .environment(viewModel)
+                        .presentationDetents([.medium])
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TestFlightScreenshotTaken"))) { _ in
                 guard BetaContentViewModel.isDebugOrTestFlight() else { return }
@@ -87,6 +91,14 @@ public struct BetaContentView<Content: View>: View {
             }
             .allowsHitTesting(false)
             .environment(viewModel)
+        }
+    }
+
+    private var presentedSheetBinding: Binding<BetaContentViewModel.PresentedSheet?> {
+        Binding {
+            viewModel.presentedSheet
+        } set: { newValue in
+            viewModel.presentedSheet = newValue
         }
     }
 }
