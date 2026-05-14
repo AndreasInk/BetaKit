@@ -105,23 +105,20 @@ public struct BetaContentView<Content: View>: View {
 
 #Preview {
     @Previewable @State var viewModel = BetaContentViewModel()
-    let rect = RoundedRectangle(cornerRadius: 26.0)
-    ZStack {
-        Color.black.opacity(0.3)
-            .ignoresSafeArea()
-        
-        BetaContentView(
-            viewModel: BetaContentViewModel(),
-            backgroundMaterial: .thickMaterial,
-            foregroundCardStyle: .blue
-        ) {
-            if #available(iOS 26.0, *) {
-                rect
-                    .foregroundStyle(.white)
-            } else {
-                rect
-            }
-        }
-        .environment(viewModel)
+    VStack(spacing: 12) {
+        Text("Parent view remains visible")
+            .font(.title2.weight(.semibold))
+        Text("BetaContentView is attached as an overlay.")
+            .foregroundStyle(.secondary)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Color.black.opacity(0.08))
+    .beta(
+        viewModel: viewModel,
+        backgroundMaterial: .thickMaterial,
+        foregroundCardStyle: .blue
+    )
+    .onAppear {
+        viewModel.showScreenshotOverlay = true
     }
 }

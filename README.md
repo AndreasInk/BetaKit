@@ -12,7 +12,7 @@ Many testers want to help but skip feedback because it is too much work in the m
 - Screenshot tip flow to guide users to TestFlight's built-in feedback path
 - Customize prompts per screenshotted view for better / faster feedback
 - Hotswappable analytics sink (Optional copy-to-pasteboard button for response + context sharing)
-- SwiftUI-first API that can be embedded in existing views or use the `.beta` modifier
+- SwiftUI-first API that attaches as an overlay with the `.beta` modifier, so host views stay visible and interactive
 
 ## Requirements
 - iOS 17+
@@ -75,6 +75,7 @@ struct ContentView: View {
 
 You can leave `feedbackQuestions` unset to use `TestFlightFeedbackQuestion.defaultQuestions`.
 If `developerProfileImageURL` is set, sheets will render your remote profile image next to the app icon.
+The `.beta` modifier preserves your view as the base content and mounts `BetaContentView` as a non-intercepting overlay. Prefer the modifier instead of wrapping your screen directly in `BetaContentView`.
 
 ## Deep links for sheet presentation
 `BetaKit` supports deep links so host apps can open sheets from notification taps, debug tools, or internal routing.
