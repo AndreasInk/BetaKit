@@ -604,16 +604,19 @@ public final class BetaContentViewModel {
     }
 }
 
+@MainActor
 public enum AnalyticsManager {
     public typealias EventHandler = @Sendable (_ event: String, _ info: [String: String]) -> Void
 
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var eventHandler: EventHandler = defaultEventHandler
+    private static let defaultEventHandler: EventHandler = { event, info in
+        #if DEBUG
+        print("[BetaFeedbackKit] \(event): \(info)")
+        #endif
+    }
+    private static var eventHandler: EventHandler = defaultEventHandler
 
     public static func configure(eventHandler: @escaping EventHandler) {
-        lock.lock()
         self.eventHandler = eventHandler
-        lock.unlock()
     }
 
     public static func reset() {
@@ -621,15 +624,8 @@ public enum AnalyticsManager {
     }
 
     public static func logEvent(_ event: String, info: [String: String]) {
-        lock.lock()
         let handler = eventHandler
-        lock.unlock()
         handler(event, info)
     }
 
-    private static func defaultEventHandler(_ event: String, _ info: [String: String]) {
-        #if DEBUG
-        print("[BetaFeedbackKit] \(event): \(info)")
-        #endif
-    }
 }

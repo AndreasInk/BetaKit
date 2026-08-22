@@ -113,7 +113,8 @@ struct OnDeviceBetaStateReporter: BetaStateReporting {
     }
 }
 
-protocol FeedbackDiagnosticMonitoring: Sendable {
+@MainActor
+protocol FeedbackDiagnosticMonitoring {
     func start(stateDomains: Set<String>)
     func context(
         matching states: [BetaFeedbackState],
@@ -138,8 +139,8 @@ private final class MetricKitObservation: @unchecked Sendable {
 }
 #endif
 
-final class OnDeviceFeedbackDiagnosticMonitor: FeedbackDiagnosticMonitoring, @unchecked Sendable {
-    private let lock = NSLock()
+@MainActor
+final class OnDeviceFeedbackDiagnosticMonitor: FeedbackDiagnosticMonitoring {
     private var configuredDomains: Set<String> = []
     private var evidence: [BetaFeedbackDiagnosticEvidence] = []
 
@@ -158,14 +159,10 @@ final class OnDeviceFeedbackDiagnosticMonitor: FeedbackDiagnosticMonitoring, @un
         if #available(iOS 27.0, *) {
             startAvailable(stateDomains: logicalDomains)
         } else {
-            lock.lock()
             configuredDomains = logicalDomains
-            lock.unlock()
         }
         #else
-        lock.lock()
         configuredDomains = logicalDomains
-        lock.unlock()
         #endif
     }
 
@@ -200,8 +197,6 @@ final class OnDeviceFeedbackDiagnosticMonitor: FeedbackDiagnosticMonitoring, @un
     }
 
     private func record(_ item: BetaFeedbackDiagnosticEvidence) {
-        lock.lock()
-        defer { lock.unlock() }
         guard !evidence.contains(item) else { return }
         evidence.append(item)
         evidence = Array(evidence.suffix(50))
@@ -241,10 +236,8 @@ enum BetaDiagnosticCorrelation {
 @available(iOS 27.0, *)
 private extension OnDeviceFeedbackDiagnosticMonitor {
     func startAvailable(stateDomains logicalDomains: Set<String>) {
-        lock.lock()
         if configuredDomains == logicalDomains,
            (observation as? MetricKitObservation)?.task != nil {
-            lock.unlock()
             return
         }
         let oldObservation = observation as? MetricKitObservation
@@ -258,7 +251,6 @@ private extension OnDeviceFeedbackDiagnosticMonitor {
         configuredDomains = logicalDomains
         evidence = []
         observation = newObservation
-        lock.unlock()
 
         oldObservation?.task?.cancel()
         let task = Task { [weak self, manager] in
@@ -269,24 +261,20 @@ private extension OnDeviceFeedbackDiagnosticMonitor {
             }
         }
 
-        lock.lock()
         if configuredDomains == logicalDomains, observation === newObservation {
             newObservation.task = task
         } else {
             task.cancel()
         }
-        lock.unlock()
     }
 
     func availableContext(
         matching states: [BetaFeedbackState],
         around feedbackDate: Date
     ) -> BetaFeedbackDiagnosticContext {
-        lock.lock()
         let hasConfiguredDomains = !configuredDomains.isEmpty
         let availableEvidence = evidence
         let isListening = (observation as? MetricKitObservation)?.task != nil
-        lock.unlock()
 
         guard hasConfiguredDomains, isListening else { return .unavailable }
         let matches = BetaDiagnosticCorrelation.relatedEvidence(
@@ -298,12 +286,10 @@ private extension OnDeviceFeedbackDiagnosticMonitor {
     }
 
     func stopAvailable() {
-        lock.lock()
         let oldObservation = observation as? MetricKitObservation
         observation = nil
         configuredDomains = []
         evidence = []
-        lock.unlock()
         oldObservation?.task?.cancel()
     }
 

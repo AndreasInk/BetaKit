@@ -162,16 +162,17 @@ struct BetaFeedbackConversationRecord: Sendable, Codable, Equatable {
     }
 }
 
-protocol BetaFeedbackConversationStoring: Sendable {
+@MainActor
+protocol BetaFeedbackConversationStoring {
     func load() -> BetaFeedbackConversationRecord?
     func save(_ record: BetaFeedbackConversationRecord)
     func clear()
 }
 
-final class UserDefaultsFeedbackConversationStore: BetaFeedbackConversationStoring, @unchecked Sendable {
+@MainActor
+final class UserDefaultsFeedbackConversationStore: BetaFeedbackConversationStoring {
     private let defaults: UserDefaults
     private let key: String
-    private let lock = NSLock()
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -180,23 +181,17 @@ final class UserDefaultsFeedbackConversationStore: BetaFeedbackConversationStori
     }
 
     func load() -> BetaFeedbackConversationRecord? {
-        lock.lock()
-        defer { lock.unlock() }
         guard let data = defaults.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(BetaFeedbackConversationRecord.self, from: data)
     }
 
     func save(_ record: BetaFeedbackConversationRecord) {
         guard let data = try? JSONEncoder().encode(record) else { return }
-        lock.lock()
         defaults.set(data, forKey: key)
-        lock.unlock()
     }
 
     func clear() {
-        lock.lock()
         defaults.removeObject(forKey: key)
-        lock.unlock()
     }
 }
 
@@ -392,8 +387,8 @@ public extension BetaContentViewModel {
         return await handleNotificationResponse(capturedResponse)
     }
 
-    /// Captures and processes a BetaFeedbackKit notification response while keeping the system's
-    /// notification-response execution window open through model analysis and scheduling.
+    /// Captures and processes a BetaFeedbackKit notification response while returning promptly after
+    /// durable persistence; model analysis and scheduling continue asynchronously.
     ///
     /// Call this overload directly from a nonisolated notification-center delegate. It returns
     /// `false` synchronously for notifications that do not belong to BetaFeedbackKit; in that case the
@@ -475,7 +470,9 @@ public extension BetaContentViewModel {
                 "responseNumber": String(record.responses.count),
                 "responseStyle": responseStyleName(record.pendingQuestion.responseStyle)
             ])
-            await processFeedbackConversation(record)
+            Task { @MainActor [weak self] in
+                await self?.processFeedbackConversation(record)
+            }
         case .finish:
             guard record.hasAtLeastOneResponse else { return true }
             await completeFeedbackConversation(record, outcome: "tester_finished")

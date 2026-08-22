@@ -1,34 +1,30 @@
 # AGENTS.md
 
-## Mission
-BetaFeedbackKit is an open source SwiftUI package that helps TestFlight beta testers share better feedback with less friction.
+## Product stance
 
-## What to optimize for
-- Fast, low-effort tester feedback capture
-- Clear and respectful UI copy
-- Reliable behavior in TestFlight and debug builds
-- Safe defaults for package consumers
+BetaFeedbackKit turns a screenshot and one short tester response into feedback a developer can act on. Tester effort is the constraint: if a feature needs an account, backend, long form, or technical language, it is probably the wrong feature.
 
-## Repository basics
-- Package name: `BetaFeedbackKit`
-- Main source target: `Sources/BetaFeedbackKit`
-- Tests: `Tests/BetaFeedbackKitTests`
-- Minimum platforms:
-  - iOS 17+
-  - macOS 14+
+## Non-negotiables
 
-## Local commands
-- Build: `swift build`
-- Test: `swift test`
+- Preserve the tester's original words. Generated summaries must be extractive, and generated questions must not invent facts, causes, or reproduction steps.
+- Intelligent clarification and notification conversations are opt-in. Denied permissions, unavailable models, and older systems must shorten or fall back without losing any response already captured.
+- Never log prompts, tester responses, screenshots, or developer context in release builds. Notification `userInfo` carries routing data only.
+- Be precise about the boundary: BetaFeedbackKit prepares and optionally copies a report; it does not submit feedback to TestFlight.
+- Keep the public API small and stable. Make breaking changes only when intentional, documented, and worth the migration.
 
-## Implementation notes
-- Keep new UI components small and composable.
-- Preserve public API stability unless a breaking change is intentional and documented.
-- Prefer platform-safe SwiftUI color/material usage that compiles on both iOS and macOS.
-- If adding TestFlight-specific behavior, guard platform or runtime assumptions explicitly.
+## Implementation rules
 
-## PR checklist
-- `swift build` passes.
-- `swift test` passes.
-- README is updated for user-facing behavior changes.
-- Any new public API is documented with a short usage example.
+- Package: `BetaFeedbackKit`; sources: `Sources/BetaFeedbackKit`; tests: `Tests/BetaFeedbackKitTests`.
+- Support iOS 17+ and macOS 14+. Guard iOS 27 and TestFlight-only behavior explicitly and keep cross-platform builds green.
+- Prefer small, composable SwiftUI views and direct state flow over new abstractions.
+- The host app owns `UNUserNotificationCenter.delegate`; BetaFeedbackKit may register categories and handle only its own routed responses.
+- Treat notification conversations as lifecycle state: persist before async work, handle cancellation and relaunch, expire stale records, and replace old notifications cleanly.
+- Add observability for outcomes and failure reasons, never for private feedback content.
+
+## Verification
+
+- Run `swift build` and `swift test`.
+- Add focused regression tests for logic and state transitions.
+- Visually inspect UI changes.
+- For notification or lifecycle changes, verify permission denial, model unavailability, background/relaunch, and repeated screenshots on iPhone when possible.
+- Update README examples when behavior or public API changes.

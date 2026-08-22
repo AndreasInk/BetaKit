@@ -1,9 +1,8 @@
 # BetaFeedbackKit
 
-BetaFeedbackKit helps TestFlight testers turn a screenshot into useful feedback with very little effort.
+BetaFeedbackKit turns vague TestFlight screenshots into structured, developer-ready reports without a backend or bug form. Testers do less work; you get their original words, targeted follow-ups, and relevant app context.
 
 It can:
-
 - show lightweight screenshot guidance
 - ask up to three short follow-up questions on-device
 - add app, device, and developer-provided context
@@ -12,22 +11,28 @@ It can:
 ## How it works
 
 ```mermaid
-flowchart TD
-    A[Take a screenshot] --> B[See a quick tip]
-    B --> C{Notification arrives?}
-    C -- No --> Z[Share through TestFlight normally]
-    C -- Yes --> D[Long-press and tap Reply]
-    D --> E[Describe what happened]
-    E --> F[Answer 0–3 short follow-ups]
-    F --> G[Report is ready<br/>Copied when enabled]
-    G --> H[Tap the screenshot checkmark<br/>Share Beta Feedback<br/>Paste the report]
+flowchart LR
+    A[Take a screenshot] --> B[Reply to the notification]
+    B --> C[Answer up to 3 follow-ups]
+    C --> D[Paste the report into TestFlight]
 ```
 
 If notifications or the on-device model are unavailable, the flow shortens instead of failing.
 
 ## Install
 
-Add `https://github.com/AndreasInk/BetaFeedbackKit` in Xcode's package dependencies.
+Add `https://github.com/AndreasInk/BetaFeedbackKit` in Xcode's package dependencies, or add it to `Package.swift`:
+
+```swift
+dependencies: [
+    .package(
+        url: "https://github.com/AndreasInk/BetaFeedbackKit",
+        branch: "main"
+    )
+]
+```
+
+Then add the `BetaFeedbackKit` library product to your app target.
 
 - iOS 17+
 - macOS 14+
@@ -61,7 +66,7 @@ struct ContentView: View {
 }
 ```
 
-Both intelligent clarification and notification conversations are off by default.
+`feedbackClarificationMode: .onDevice` lets Apple's on-device model ask a follow-up in the feedback sheet. `feedbackNotificationMode: .onScreenshot` starts the multi-turn notification flow after a screenshot. Both are opt-in.
 
 ## Notification feedback on iOS 27
 
@@ -119,17 +124,12 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
 Set the delegate during app launch and keep the same `BetaContentViewModel` available to it. Foreground banners require the `willPresent` forwarding shown above.
 
-On iOS 17–26, or when notifications cannot be used, the package falls back to normal TestFlight screenshot sharing. If Foundation Models is unavailable, the tester's first answer is still prepared without more questions.
+On older systems or without notification access, BetaFeedbackKit falls back to normal TestFlight sharing; if only the model is unavailable, it prepares the tester's first response without follow-ups.
 
 ## Privacy
 
-- Foundation Models analysis runs on-device. There is no backend, API key, account, or external model provider.
-- An active conversation is stored in the host app's `UserDefaults` for up to 24 hours. It includes tester responses, captured context, generated analysis, and the finished report.
-- Notification `userInfo` contains routing IDs only. The visible notification text contains the current question, which may be generated from the supplied feedback and context.
-- An optional app-rendered screenshot stays in memory for the active conversation and is never added to the report.
-- BetaFeedbackKit analytics contain flow metadata, not tester responses.
-
-Do not place personal data, tokens, or URLs in developer context or state labels.
+- Analysis stays on-device with no backend, API key, account, or external model provider. Active conversations remain in the host app's `UserDefaults` for up to 24 hours; an optional app-rendered screenshot stays in memory only.
+- Notification `userInfo` contains routing IDs only, while visible questions may reflect supplied feedback or context. Analytics contain flow metadata, never tester responses; do not supply personal data, tokens, or private URLs as context.
 
 ## Advanced options
 
@@ -138,15 +138,6 @@ Do not place personal data, tokens, or URLs in developer context or state labels
 - `onFeedbackPrepared` and `latestFeedbackReport` expose the finished report.
 - `beta-feedback` and `beta-screenshot-tip` are supported deep-link hosts through `handleDeepLink(_:)`.
 - `startFeedbackNotificationConversation()` starts the same flow from a debug menu or custom trigger.
-
-The package keeps the tester's original words. Generated summaries are extractive, and no reproduction steps are invented.
-
-## Development
-
-```bash
-swift build
-swift test
-```
 
 ## License
 
