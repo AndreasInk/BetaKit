@@ -277,20 +277,29 @@ public struct BetaFeedbackNotificationResponse: Sendable {
     }
 }
 
+private actor BetaFeedbackNotificationCompletionGate {
+    private var hasCompleted = false
+
+    func claim() -> Bool {
+        guard !hasCompleted else { return false }
+        hasCompleted = true
+        return true
+    }
+}
+
 private final class BetaFeedbackNotificationCompletionBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var completionHandler: (() -> Void)?
+    private let gate = BetaFeedbackNotificationCompletionGate()
+    private let completionHandler: () -> Void
 
     init(_ completionHandler: @escaping () -> Void) {
         self.completionHandler = completionHandler
     }
 
-    func call() {
-        lock.lock()
-        let completionHandler = self.completionHandler
-        self.completionHandler = nil
-        lock.unlock()
-        completionHandler?()
+    func callOnMainActor() async {
+        guard await gate.claim() else { return }
+        await MainActor.run {
+            completionHandler()
+        }
     }
 }
 
@@ -398,13 +407,13 @@ public extension BetaContentViewModel {
         let completion = BetaFeedbackNotificationCompletionBox(completionHandler)
         Task {
             try? await Task.sleep(for: .seconds(10))
-            completion.call()
+            await completion.callOnMainActor()
         }
         Task { @MainActor [weak self] in
             if let self {
                 _ = await self.handleNotificationResponse(capturedResponse)
             }
-            completion.call()
+            await completion.callOnMainActor()
         }
         return true
     }
