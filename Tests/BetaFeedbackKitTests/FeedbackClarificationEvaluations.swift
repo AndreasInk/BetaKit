@@ -416,8 +416,10 @@ private struct ClarificationQuestionEvaluation: Evaluation {
            cases.indices.contains(requestedIndex) {
             return [cases[requestedIndex]]
         }
+        // Production invokes the model only before the single allowed follow-up.
+        let productionCases = cases.filter(\.clarificationTurns.isEmpty)
         if ProcessInfo.processInfo.environment["BETA_FEEDBACK_EVAL_SCREENSHOTS_ONLY"] == "1" {
-            return cases.filter { $0.screenshotName != nil }
+            return productionCases.filter { $0.screenshotName != nil }
         }
         guard let shard = ProcessInfo.processInfo.environment["BETA_FEEDBACK_EVAL_SHARD"]?
             .split(separator: "/")
@@ -425,11 +427,11 @@ private struct ClarificationQuestionEvaluation: Evaluation {
             shard.count == 2,
             shard[0] >= 1,
             shard[1] >= shard[0] else {
-            return cases
+            return productionCases
         }
         let index = shard[0] - 1
         let count = shard[1]
-        return cases.enumerated().compactMap { offset, value in
+        return productionCases.enumerated().compactMap { offset, value in
             offset % count == index ? value : nil
         }
     }
@@ -583,8 +585,8 @@ private struct FeedbackClarificationEvaluationTests {
         guard #available(iOS 27.0, macOS 27.0, *) else { return }
         let evaluation = ClarificationQuestionEvaluation()
         let result = try await evaluation.run(info: [
-            "dataset": "clarification-v7",
-            "prompt": "simple-feedback-v7"
+            "dataset": "single-followup-v8",
+            "prompt": "simple-feedback-v8"
         ])
         let shape = result.aggregateValue(.mean(of: evaluation.questionShape))
         print("[BetaFeedbackKitEvals] questionShape=\(shape)")

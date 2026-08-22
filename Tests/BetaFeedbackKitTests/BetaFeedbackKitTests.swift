@@ -626,7 +626,7 @@ import Testing
     #expect(summary == nil)
 }
 
-@Test @MainActor func notificationConversationEnforcesOneToFourResponses() {
+@Test @MainActor func notificationConversationAllowsOnlyOneFollowUpResponse() {
     let recordID = UUID(uuidString: "94286BC2-D716-4402-B0D8-18947B8941A5")!
     let snapshot = BetaFeedbackConversationSnapshot(
         questionID: "screenshot-feedback",
@@ -649,18 +649,19 @@ import Testing
     #expect(acceptedFirst)
     #expect(record.shouldOfferFinishAction)
 
-    for responseNumber in 2...4 {
-        record.awaitNextQuestion(.init(text: "Question \(responseNumber)?", responseStyle: .text))
-        #expect(record.expectedResponseNumber == responseNumber)
-        let accepted = record.acceptResponse("Answer \(responseNumber)")
-        #expect(accepted)
-    }
+    record.awaitNextQuestion(.init(text: "What happened next?", responseStyle: .text))
+    #expect(record.expectedResponseNumber == 2)
+    let acceptedClarification = record.acceptResponse("The screen stayed the same.")
+    #expect(acceptedClarification)
 
     #expect(record.reachedResponseLimit)
-    #expect(record.responses.count == 4)
-    let acceptedFifth = record.acceptResponse("A fifth answer")
-    #expect(!acceptedFifth)
+    #expect(record.responses.count == 2)
+    let acceptedExtraResponse = record.acceptResponse("Another detail")
+    #expect(!acceptedExtraResponse)
     #expect(record.responses.first?.response == "  Continue did nothing.\n")
+    #expect(record.analysisInput()?.clarificationTurns == [
+        .init(question: "What happened next?", response: "The screen stayed the same.")
+    ])
 }
 
 @Test func lowInformationClarificationResponsesEndThatLineOfInquiry() {
@@ -785,6 +786,22 @@ import Testing
     #expect(!String(describing: userInfo).contains("Continue did nothing"))
     #expect(BetaFeedbackNotificationEnvelope(userInfo: userInfo)?.conversationID == id)
     #expect(BetaFeedbackNotificationEnvelope(userInfo: userInfo)?.responseNumber == 2)
+}
+
+@Test @MainActor func notificationEnvelopeRoutesLegacyFollowUpsWithoutAllowingNewOnes() {
+    let id = UUID(uuidString: "94286BC2-D716-4402-B0D8-18947B8941A5")!
+    let legacyUserInfo = BetaFeedbackNotificationEnvelope(
+        conversationID: id,
+        responseNumber: 3
+    ).userInfo
+    let invalidUserInfo = BetaFeedbackNotificationEnvelope(
+        conversationID: id,
+        responseNumber: 5
+    ).userInfo
+
+    #expect(BetaFeedbackConversationRecord.maximumResponseCount == 2)
+    #expect(BetaFeedbackNotificationEnvelope(userInfo: legacyUserInfo)?.responseNumber == 3)
+    #expect(BetaFeedbackNotificationEnvelope(userInfo: invalidUserInfo) == nil)
 }
 
 @Test func notificationRoutingIdentifiersUseRenamedPackageNamespace() {

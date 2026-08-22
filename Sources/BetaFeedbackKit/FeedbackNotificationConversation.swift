@@ -13,8 +13,8 @@ public enum BetaFeedbackNotificationMode: Sendable, Equatable {
     /// Keep the existing screenshot guidance and feedback sheet behavior.
     case disabled
 
-    /// On iOS 27 or later, ask for feedback in notifications and prepare a report after
-    /// one to four tester responses. Earlier systems keep the existing screenshot flow.
+    /// On iOS 27 or later, ask for feedback in notifications and optionally ask one
+    /// follow-up question. Earlier systems keep the existing screenshot flow.
     case onScreenshot
 }
 
@@ -78,7 +78,10 @@ struct BetaFeedbackConversationSnapshot: Sendable, Codable, Equatable {
 }
 
 struct BetaFeedbackConversationRecord: Sendable, Codable, Equatable {
-    static let maximumResponseCount = 4
+    /// The original feedback plus at most one answer to a generated follow-up.
+    static let maximumResponseCount = 2
+    /// Keeps responses from already-delivered notifications routable after upgrading.
+    static let legacyMaximumRoutableResponseCount = 4
 
     let id: UUID
     let createdAt: Date
@@ -212,7 +215,7 @@ struct BetaFeedbackNotificationEnvelope: Sendable, Equatable {
               let idValue = userInfo[BetaFeedbackNotificationIdentifiers.conversationIDKey] as? String,
               let id = UUID(uuidString: idValue),
               let responseNumber = userInfo[BetaFeedbackNotificationIdentifiers.turnKey] as? Int,
-              (1...BetaFeedbackConversationRecord.maximumResponseCount).contains(responseNumber) else {
+              (1...BetaFeedbackConversationRecord.legacyMaximumRoutableResponseCount).contains(responseNumber) else {
             return nil
         }
         self.conversationID = id
@@ -447,6 +450,13 @@ public extension BetaContentViewModel {
             return true
         }
 
+        // A previous package revision could have already scheduled another question.
+        // Complete with the first clarification instead of reviving that older flow.
+        if record.status != .completed, record.reachedResponseLimit {
+            await completeFeedbackConversation(record, outcome: "response_limit_migrated")
+            return true
+        }
+
         guard record.status == .awaitingResponse,
               record.pendingRequestID == response.requestIdentifier,
               record.expectedResponseNumber == responseNumber else {
@@ -537,6 +547,10 @@ public extension BetaContentViewModel {
         }
         if record.status == .completed, let report = record.completedReport {
             latestFeedbackReport = report
+            return
+        }
+        if record.reachedResponseLimit {
+            await completeFeedbackConversation(record, outcome: "response_limit_migrated")
             return
         }
         if record.status == .processing {
@@ -703,6 +717,7 @@ private extension BetaContentViewModel {
 
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [record.pendingRequestID])
+        center.removeDeliveredNotifications(withIdentifiers: [record.pendingRequestID])
         do {
             try await center.add(
                 BetaFeedbackNotificationFactory.completionRequest(
