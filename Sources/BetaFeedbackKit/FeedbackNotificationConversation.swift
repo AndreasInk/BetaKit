@@ -600,6 +600,14 @@ private extension BetaContentViewModel {
             return
         }
 
+        if input.latestResponseRepeatsEarlierResponse {
+            betaFeedbackConversationLogger.info(
+                "Tester repeated an earlier response; completing without another question"
+            )
+            await completeFeedbackConversation(record, outcome: "repeated_response")
+            return
+        }
+
         guard feedbackClarificationMode == .onDevice,
               #available(iOS 27.0, *) else {
             await completeFeedbackConversation(record, outcome: "model_disabled")

@@ -114,6 +114,63 @@ private struct ClarificationQuestionEvaluation: Evaluation {
             expectedBehavior: "Return no question because the user already described both the visual problem and the preferred Liquid Glass appearance. Do not ask for another description of the look, finish, color, clarity, or style."
         ),
         Case(
+            feedback: "Bad ui",
+            developerContext: [
+                "feature": "settings_information_architecture",
+                "screen": "settings",
+                "screen_summary": "Settings and controls"
+            ],
+            clarificationTurns: [],
+            screenshotName: nil,
+            visualContext: nil,
+            expectedBehavior: "Ask which visual area or layout change would improve the settings screen without inventing a specific defect.",
+            forbiddenQuestionTerms: ["frequently", "often", "how many times"]
+        ),
+        Case(
+            feedback: "Bad ui",
+            developerContext: [
+                "feature": "settings_information_architecture",
+                "screen": "settings",
+                "screen_summary": "Settings and controls"
+            ],
+            clarificationTurns: [
+                BetaFeedbackClarificationTurn(
+                    question: "What specific visual element or layout change would make the interface clearer to you?",
+                    response: "More padding"
+                )
+            ],
+            screenshotName: nil,
+            visualContext: nil,
+            expectedBehavior: "Ask where the additional padding should apply. Do not ask again what visual element or layout change the user wants.",
+            requiredQuestionTerms: ["where", "which", "part", "area", "section", "screen", "view"],
+            forbiddenQuestionTerms: [
+                "what specific visual element or layout change",
+                "what visual element or layout change",
+                "make the interface clearer"
+            ]
+        ),
+        Case(
+            feedback: "Bad ui",
+            developerContext: [
+                "feature": "settings_information_architecture",
+                "screen": "settings",
+                "screen_summary": "Settings and controls"
+            ],
+            clarificationTurns: [
+                BetaFeedbackClarificationTurn(
+                    question: "What specific visual element or layout change would make the interface clearer to you?",
+                    response: "More padding"
+                ),
+                BetaFeedbackClarificationTurn(
+                    question: "Where should the extra padding be applied?",
+                    response: "Full view"
+                )
+            ],
+            screenshotName: nil,
+            visualContext: nil,
+            expectedBehavior: "Return no question because the requested change and its full-view scope are now supplied."
+        ),
+        Case(
             feedback: "After I tapped Continue on checkout, the app showed error 42 every time instead of opening confirmation.",
             developerContext: ["screen": "Checkout"],
             clarificationTurns: [],
@@ -244,7 +301,7 @@ private struct ClarificationQuestionEvaluation: Evaluation {
             clarificationTurns: [],
             screenshotName: nil,
             visualContext: nil,
-            expectedBehavior: "Either ask what part of the section feels hard to use or return no question if a grounded rewrite is unavailable. Never invent a control or interaction.",
+            expectedBehavior: "Ask what part of the section feels hard to use without inventing a control or interaction.",
             forbiddenQuestionTerms: ["button", "toggle", "switch", "tapped", "pressed"]
         ),
         Case(
@@ -274,7 +331,7 @@ private struct ClarificationQuestionEvaluation: Evaluation {
             clarificationTurns: [],
             screenshotName: "examcram-quiz",
             visualContext: "A multiple-choice question shows four answer options and a disabled Check button before any answer is selected.",
-            expectedBehavior: "Either ask whether the question is unclear or selecting an answer does not work, or return no question if a grounded rewrite is unavailable. Do not assume the disabled Check button is the problem or that the user chose an answer.",
+            expectedBehavior: "Ask whether the question is unclear or selecting an answer does not work. Do not assume the disabled Check button is the problem or that the user chose an answer.",
             requiredQuestionTerms: ["unclear", "select", "choose", "answer"],
             forbiddenQuestionTerms: ["button", "icon", "tapped", "pressed", "tried", "disabled check", "check button", "chose", "help button"]
         ),
@@ -301,7 +358,7 @@ private struct ClarificationQuestionEvaluation: Evaluation {
             clarificationTurns: [],
             screenshotName: "agentalerts-pairing",
             visualContext: "A pairing screen explains opening a setup webpage, completing verification, then scanning or pasting a one-time setup code; it offers Scan QR Code and Paste Setup Code.",
-            expectedBehavior: "Either ask which part of connecting is unclear or return no question if a grounded rewrite is unavailable. Never ask them to share a key, code, or token.",
+            expectedBehavior: "Ask which part of connecting is unclear. Never ask them to share a key, code, or token.",
             forbiddenQuestionTerms: ["connect button", "when you tried", "tapped", "pressed", "share", "key", "token"]
         ),
         Case(
@@ -354,6 +411,14 @@ private struct ClarificationQuestionEvaluation: Evaluation {
     ]
 
     static var evaluatedCases: [Case] {
+        if let requestedIndex = ProcessInfo.processInfo.environment["BETA_FEEDBACK_EVAL_CASE_INDEX"]
+            .flatMap(Int.init),
+           cases.indices.contains(requestedIndex) {
+            return [cases[requestedIndex]]
+        }
+        if ProcessInfo.processInfo.environment["BETA_FEEDBACK_EVAL_SCREENSHOTS_ONLY"] == "1" {
+            return cases.filter { $0.screenshotName != nil }
+        }
         guard let shard = ProcessInfo.processInfo.environment["BETA_FEEDBACK_EVAL_SHARD"]?
             .split(separator: "/")
             .compactMap({ Int($0) }),
@@ -416,7 +481,18 @@ private struct ClarificationQuestionEvaluation: Evaluation {
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             throw EvaluationError.missingScreenshot(name)
         }
-        return image
+        guard let maximumDimension = ProcessInfo.processInfo.environment[
+            "BETA_FEEDBACK_EVAL_IMAGE_MAX_DIMENSION"
+        ].flatMap(Int.init), maximumDimension > 0 else {
+            print("[BetaFeedbackKitEvals][image] name=\(name) dimensions=\(image.width)x\(image.height) mode=original")
+            return image
+        }
+        let resized = FeedbackScreenshotPreprocessor.resizedForModel(
+            image,
+            maximumDimension: maximumDimension
+        )
+        print("[BetaFeedbackKitEvals][image] name=\(name) dimensions=\(resized.width)x\(resized.height) mode=max-\(maximumDimension)")
+        return resized
     }
 
     var evaluators: Evaluators {
@@ -437,7 +513,7 @@ private struct ClarificationQuestionEvaluation: Evaluation {
                     question.localizedCaseInsensitiveContains($0)
                 } ?? false)
             let isNew = !previousQuestions.contains {
-                FeedbackQuestionRepetitionGuard.isSemanticRepeat(question, of: $0)
+                Self.isSemanticRepeat(question, of: $0)
             }
             let requiredTerms = evaluationCase?.requiredQuestionTerms ?? []
             let usesRequiredDomainTerm = isNoQuestion || requiredTerms.isEmpty
@@ -474,6 +550,26 @@ private struct ClarificationQuestionEvaluation: Evaluation {
         aggregator.computeMean(of: questionShape)
     }
 
+    private static func isSemanticRepeat(_ candidate: String, of priorQuestion: String) -> Bool {
+        let ignoredWords: Set<String> = [
+            "a", "an", "and", "are", "at", "did", "do", "does", "for", "from", "how",
+            "in", "is", "it", "of", "on", "or", "the", "this", "to", "was", "were",
+            "what", "when", "which", "with", "you", "your"
+        ]
+        func significantTerms(in question: String) -> Set<String> {
+            Set(question.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map(String.init)
+                .filter { $0.count > 2 && !ignoredWords.contains($0) })
+        }
+
+        let candidateTerms = significantTerms(in: candidate)
+        let priorTerms = significantTerms(in: priorQuestion)
+        guard !candidateTerms.isEmpty, !priorTerms.isEmpty else { return false }
+
+        let sharedCount = candidateTerms.intersection(priorTerms).count
+        return Double(sharedCount) / Double(min(candidateTerms.count, priorTerms.count)) >= 0.75
+    }
+
     enum EvaluationError: Error {
         case unknownCase
         case modelUnavailable
@@ -487,8 +583,8 @@ private struct FeedbackClarificationEvaluationTests {
         guard #available(iOS 27.0, macOS 27.0, *) else { return }
         let evaluation = ClarificationQuestionEvaluation()
         let result = try await evaluation.run(info: [
-            "dataset": "clarification-v5",
-            "prompt": "curious-ux-designer-v5"
+            "dataset": "clarification-v6",
+            "prompt": "curious-ux-designer-v6"
         ])
         let shape = result.aggregateValue(.mean(of: evaluation.questionShape))
         print("[BetaFeedbackKitEvals] questionShape=\(shape)")
