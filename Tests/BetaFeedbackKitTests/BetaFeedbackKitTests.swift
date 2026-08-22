@@ -633,7 +633,7 @@ import Testing
     )
 
     #expect(notification.title == "Tell me what you noticed")
-    #expect(notification.message.contains("Press and hold"))
+    #expect(notification.message == "Press and hold the notification, then tap Reply. Answer a few short questions to help improve the app.")
     #expect(unavailable.title == "Share through TestFlight")
     #expect(!unavailable.message.localizedCaseInsensitiveContains("notification"))
     #expect(disabled == .init(title: "Custom title", message: "Custom message"))
@@ -647,7 +647,7 @@ import Testing
         "has_pro": "true",
     ])
 
-    #expect(summary?.text == "Home 2.0 scaffold dashboard · Home experiment")
+    #expect(summary?.text == "Home 2.0 scaffold dashboard")
 }
 
 @Test func screenshotContextSummaryOmitsPrivateOrUnknownMetadata() {

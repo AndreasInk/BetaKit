@@ -20,7 +20,7 @@ struct BetaScreenshotGuidance: Equatable {
         if notificationConversationStarted {
             return Self(
                 title: "Tell me what you noticed",
-                message: "I’ll send a notification. Press and hold it, then tap Reply. The app may ask a few short questions to better understand your feedback."
+                message: "Press and hold the notification, then tap Reply. Answer a few short questions to help improve the app."
             )
         }
         if notificationMode == .onScreenshot {
@@ -43,13 +43,7 @@ struct BetaScreenshotContextSummary: Equatable {
         )
         let feature = readableValue(context["feature"])
 
-        if let screen {
-            if let feature,
-               screen.caseInsensitiveCompare(feature) != .orderedSame {
-                return Self(text: "\(screen) · \(feature)")
-            }
-            return Self(text: screen)
-        }
+        if let screen { return Self(text: screen) }
         if let feature {
             return Self(text: feature)
         }
@@ -70,10 +64,45 @@ struct BetaScreenshotContextSummary: Equatable {
     }
 }
 
+private struct BetaScreenshotPopoverView: View {
+    let guidance: BetaScreenshotGuidance
+    let context: BetaScreenshotContextSummary?
+    let backgroundMaterial: Material?
+
+    @ViewBuilder
+    var body: some View {
+        let content = VStack(alignment: .leading, spacing: 8) {
+            Label(guidance.title, systemImage: "checkmark.circle.fill")
+                .font(.headline)
+                .symbolRenderingMode(.hierarchical)
+
+            Text(guidance.message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if let context {
+                Divider()
+                Label(context.text, systemImage: "viewfinder")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .multilineTextAlignment(.leading)
+        .padding(16)
+        .frame(idealWidth: 280, maxWidth: 300, alignment: .leading)
+        .accessibilityElement(children: .combine)
+
+        if let backgroundMaterial {
+            content.presentationBackground(backgroundMaterial)
+        } else {
+            content
+        }
+    }
+}
+
 public struct BetaContentView<Content: View>: View {
 
     @Bindable var viewModel: BetaContentViewModel
-    @State private var screenshotConversationStarted = false
     @State private var screenshotContext: [String: String] = [:]
 
     var backgroundMaterial: Material?
@@ -156,12 +185,9 @@ public struct BetaContentView<Content: View>: View {
                         .presentationDetents([.medium])
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .betaFeedbackKitTestFlightScreenshotTaken)) { notification in
+            .onReceive(NotificationCenter.default.publisher(for: .betaFeedbackKitTestFlightScreenshotTaken)) { _ in
                 guard BetaContentViewModel.isDebugOrTestFlight() else { return }
                 screenshotContext = viewModel.feedbackContextProvider()
-                screenshotConversationStarted =
-                    notification.userInfo?[BetaFeedbackKitScreenshotEventKey.notificationConversationStarted]
-                        as? Bool ?? false
                 withAnimation {
                     viewModel.showScreenshotOverlay = true
                 }
@@ -192,38 +218,16 @@ public struct BetaContentView<Content: View>: View {
     @ViewBuilder
     private var screenshotPopoverContent: some View {
         let guidance = BetaScreenshotGuidance.make(
-            notificationConversationStarted: screenshotConversationStarted,
+            notificationConversationStarted: viewModel.screenshotNotificationConversationStarted,
             notificationMode: viewModel.feedbackNotificationMode,
             customTitle: screenshotPromptTitle,
             customMessage: screenshotPromptSubtitle
         )
-        let content = VStack(alignment: .leading, spacing: 8) {
-            Label(guidance.title, systemImage: "checkmark.circle.fill")
-                .font(.headline)
-                .symbolRenderingMode(.hierarchical)
-
-            Text(guidance.message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            if let context = BetaScreenshotContextSummary.make(from: screenshotContext) {
-                Divider()
-                Label(context.text, systemImage: "viewfinder")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .multilineTextAlignment(.leading)
-        .padding(16)
-        .frame(idealWidth: 280, maxWidth: 300, alignment: .leading)
-        .accessibilityElement(children: .combine)
-
-        if let backgroundMaterial {
-            content
-                .presentationBackground(backgroundMaterial)
-        } else {
-            content
-        }
+        BetaScreenshotPopoverView(
+            guidance: guidance,
+            context: BetaScreenshotContextSummary.make(from: screenshotContext),
+            backgroundMaterial: backgroundMaterial
+        )
     }
 
     private var screenshotPopoverBinding: Binding<Bool> {
@@ -277,4 +281,21 @@ public struct BetaContentView<Content: View>: View {
             ]
         )
     }
+}
+
+#Preview("Screenshot popover") {
+    BetaScreenshotPopoverView(
+        guidance: BetaScreenshotGuidance.make(
+            notificationConversationStarted: true,
+            notificationMode: .onScreenshot,
+            customTitle: "",
+            customMessage: ""
+        ),
+        context: BetaScreenshotContextSummary(
+            text: "Home 2.0 scaffold dashboard"
+        ),
+        backgroundMaterial: .regularMaterial
+    )
+    .padding(24)
+    .background(Color.secondary.opacity(0.08))
 }

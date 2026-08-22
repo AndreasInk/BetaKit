@@ -69,6 +69,7 @@ public final class BetaContentViewModel {
         }
     }
     var showScreenshotOverlay: Bool = false
+    var screenshotNotificationConversationStarted = false
     var hasShownTestFlightFeedbackPrompt: Bool = false
     var testFlightFeedbackAnswer: String = ""
     var testFlightFeedbackQuestionId: String = ""
@@ -203,6 +204,7 @@ public final class BetaContentViewModel {
                         Self.scheduleTestFlightScreenshotTipNotificationInternal()
                         notificationConversationStarted = false
                     }
+                    self.screenshotNotificationConversationStarted = notificationConversationStarted
                     NotificationCenter.default.post(
                         name: .betaFeedbackKitTestFlightScreenshotTaken,
                         object: nil,
