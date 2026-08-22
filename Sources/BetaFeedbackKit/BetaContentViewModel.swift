@@ -88,6 +88,9 @@ public final class BetaContentViewModel {
             }
         }
     }
+    /// Supplies a point-in-time app context snapshot for each feedback report.
+    /// Include `domain_context` when app-specific concepts or relationships would help the
+    /// on-device model choose a relevant follow-up. Values are treated as untrusted data.
     public var feedbackContextProvider: @Sendable () -> [String: String]
     public internal(set) var latestFeedbackReport: BetaFeedbackReport?
     public private(set) var activeFeedbackStates: [BetaFeedbackState] = []

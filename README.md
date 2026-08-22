@@ -51,7 +51,8 @@ struct ContentView: View {
         feedbackContextProvider: {
             [
                 "screen": "checkout",
-                "recent_action": "Tapped Continue"
+                "recent_action": "Tapped Continue",
+                "domain_context": "Checkout reserves an item before payment and shows confirmation after the reservation succeeds."
             ]
         },
         feedbackClarificationMode: .onDevice,
@@ -67,6 +68,11 @@ struct ContentView: View {
 ```
 
 `feedbackClarificationMode: .onDevice` lets Apple's on-device model ask a follow-up in the feedback sheet. `feedbackNotificationMode: .onScreenshot` starts the multi-turn notification flow after a screenshot. Both are opt-in.
+
+Use `domain_context` for a short, factual explanation of app-specific terminology or product
+relationships that should focus the follow-up. It is passed to the on-device prompt as untrusted
+data: it can disambiguate the tester's words, but it does not override them. Do not include
+personal data, secrets, tokens, private URLs, or speculative causes.
 
 ## Notification feedback on iOS 27
 

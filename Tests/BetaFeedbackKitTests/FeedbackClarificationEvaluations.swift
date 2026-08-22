@@ -44,6 +44,10 @@ private struct ClarificationQuestionEvaluation: Evaluation {
             clarificationTurns: clarificationTurns
         )
         }
+
+        var requiredQuestionTerms: [String] {
+            feedback == "The unlock timing feels wrong." ? ["step", "milestone"] : []
+        }
     }
 
     static let cases: [Case] = [
@@ -210,6 +214,18 @@ private struct ClarificationQuestionEvaluation: Evaluation {
             expectedBehavior: "Ask what percentage or relationship the user expected, or whether rounding is the mismatch they noticed. Do not declare the calculation wrong."
         ),
         Case(
+            feedback: "The unlock timing feels wrong.",
+            developerContext: [
+                "app": "WalkLock",
+                "screen": "Home",
+                "domain_context": "WalkLock unlocks selected apps when the user reaches configured daily step milestones; this feedback is about milestone-based unlocking, not clock time."
+            ],
+            clarificationTurns: [],
+            screenshotName: nil,
+            visualContext: nil,
+            expectedBehavior: "Ask which step milestone unlocked earlier or later than expected, or what milestone behavior the user expected. Use the supplied domain meaning; do not interpret timing as time of day, invent an app, or claim the unlock rule is wrong."
+        ),
+        Case(
             feedback: "These alerts are hard to read.",
             developerContext: ["app": "Agent Alerts", "screen": "Notification Center"],
             clarificationTurns: [],
@@ -264,6 +280,11 @@ private struct ClarificationQuestionEvaluation: Evaluation {
             let isSingleQuestion = value.filter { $0 == "?" }.count == 1
             let isGrounded = !bannedTerms.contains(where: value.lowercased().contains)
             let isNew = !previousQuestions.contains(value.lowercased())
+            let requiredTerms = Self.cases
+                .first(where: { $0.expectedBehavior == input.expected })?
+                .requiredQuestionTerms ?? []
+            let usesRequiredDomainTerm = requiredTerms.isEmpty
+                || requiredTerms.contains(where: value.lowercased().contains)
             let expectation = input.expected ?? ""
             let requiresQuestion = expectation.hasPrefix("Ask ")
             let requiresNoQuestion = expectation.hasPrefix("Return no question")
@@ -272,7 +293,7 @@ private struct ClarificationQuestionEvaluation: Evaluation {
                 : (requiresNoQuestion ? isNoQuestion : true)
             let hasValidShape = isNoQuestion
                 || (isSingleQuestion && value.count <= 240 && isGrounded && isNew)
-            let passes = meetsAskOrStopExpectation && hasValidShape
+            let passes = meetsAskOrStopExpectation && hasValidShape && usesRequiredDomainTerm
             return passes ? questionShape.passing() : questionShape.failing()
         }
         ModelJudgeEvaluator(
@@ -326,8 +347,8 @@ private struct FeedbackClarificationEvaluationTests {
         guard #available(iOS 27.0, macOS 27.0, *) else { return }
         let evaluation = ClarificationQuestionEvaluation()
         let result = try await evaluation.run(info: [
-            "dataset": "clarification-v2",
-            "prompt": "curious-ux-designer-v2"
+            "dataset": "clarification-v3",
+            "prompt": "curious-ux-designer-v3"
         ])
         let shape = result.aggregateValue(.mean(of: evaluation.questionShape))
         let quality = result.aggregateValue(.mean(of: evaluation.questionQuality))

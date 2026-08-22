@@ -382,7 +382,7 @@ public extension BetaContentViewModel {
     /// from the host, await this method, and then call the system completion handler promptly.
     @MainActor
     @discardableResult
-    func handleNotificationResponse(_ response: UNNotificationResponse) async -> Bool {
+    public func handleNotificationResponse(_ response: UNNotificationResponse) async -> Bool {
         guard let capturedResponse = BetaFeedbackNotificationResponse(response) else { return false }
         return await handleNotificationResponse(capturedResponse)
     }
@@ -394,7 +394,7 @@ public extension BetaContentViewModel {
     /// `false` synchronously for notifications that do not belong to BetaFeedbackKit; in that case the
     /// host remains responsible for calling `completionHandler`.
     @discardableResult
-    nonisolated func handleNotificationResponse(
+    public nonisolated func handleNotificationResponse(
         _ response: UNNotificationResponse,
         completionHandler: @escaping () -> Void
     ) -> Bool {
@@ -419,7 +419,9 @@ public extension BetaContentViewModel {
     /// synchronously, call the system completion handler, then forward it to BetaFeedbackKit.
     @MainActor
     @discardableResult
-    func handleNotificationResponse(_ response: BetaFeedbackNotificationResponse) async -> Bool {
+    public func handleNotificationResponse(
+        _ response: BetaFeedbackNotificationResponse
+    ) async -> Bool {
 
         if response.isCompletion {
             if let conversationID = response.conversationID,
@@ -511,7 +513,7 @@ public extension BetaContentViewModel {
 
     /// Returns presentation options only for BetaFeedbackKit-owned notifications.
     /// Forward this from the host delegate's foreground notification callback.
-    func notificationPresentationOptions(
+    public func notificationPresentationOptions(
         for notification: UNNotification
     ) -> UNNotificationPresentationOptions? {
         guard notification.request.content.userInfo[BetaFeedbackNotificationIdentifiers.sourceKey] as? String
