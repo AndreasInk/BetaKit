@@ -139,6 +139,10 @@ On older systems or without notification access, BetaFeedbackKit falls back to n
 - `beta-feedback` and `beta-screenshot-tip` are supported deep-link hosts through `handleDeepLink(_:)`.
 - `startFeedbackNotificationConversation()` starts the same flow from a debug menu or custom trigger.
 
+## Development
+
+Run `swift test` for deterministic coverage. Xcode 27 also runs the Apple Evaluations test, which scores clarification quality across text, conversation-history, and bundled screenshot fixtures using the on-device model.
+
 ## License
 
 MIT

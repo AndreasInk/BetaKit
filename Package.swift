@@ -24,7 +24,8 @@ let package = Package(
         ),
         .testTarget(
             name: "BetaFeedbackKitTests",
-            dependencies: ["BetaFeedbackKit"]
+            dependencies: ["BetaFeedbackKit"],
+            resources: [.process("Fixtures")]
         ),
     ]
 )
