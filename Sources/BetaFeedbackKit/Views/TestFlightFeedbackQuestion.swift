@@ -1,6 +1,6 @@
 //
 //  TestFlightFeedbackQuestion.swift
-//  BetaKit
+//  BetaFeedbackKit
 //
 //  Created by Andreas Ink on 2/6/26.
 //

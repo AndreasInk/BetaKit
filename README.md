@@ -1,133 +1,138 @@
-# BetaKit
+# BetaFeedbackKit
 
-BetaKit is an open source SwiftUI package focused on one job: helping TestFlight beta testers share better feedback.
+BetaFeedbackKit helps TestFlight testers turn a screenshot into useful feedback with very little effort.
 
-## Why BetaKit
-Many testers want to help but skip feedback because it is too much work in the moment. BetaKit adds lightweight prompts and screenshot-aware nudges so users can submit useful feedback quickly.
+It can:
 
-<img width="6880" height="3584" alt="image" src="https://github.com/user-attachments/assets/9bd2e16a-a7fa-483a-8515-95f2b942c3b8" />
+- show lightweight screenshot guidance
+- ask up to three short follow-up questions on-device
+- add app, device, and developer-provided context
+- copy the finished report for TestFlight
 
-## Current capabilities
-- TestFlight feedback prompt sheet with rotating daily question
-- Screenshot tip flow to guide users to TestFlight's built-in feedback path
-- Customize prompts per screenshotted view for better / faster feedback
-- Hotswappable analytics sink (Optional copy-to-pasteboard button for response + context sharing)
-- SwiftUI-first API that attaches as an overlay with the `.beta` modifier, so host views stay visible and interactive
+<img width="6880" height="3584" alt="BetaFeedbackKit" src="https://github.com/user-attachments/assets/9bd2e16a-a7fa-483a-8515-95f2b942c3b8" />
 
-## Requirements
+## Install
+
+Add `https://github.com/AndreasInk/BetaFeedbackKit` in Xcode's package dependencies.
+
 - iOS 17+
 - macOS 14+
 - Swift 6.2+
-
-## Installation (Swift Package Manager)
-Add this package to your app in Xcode using the repository URL.
+- Xcode 27+ for Foundation Models, StateReporting, and MetricKit features
 
 ## Quick start
+
 ```swift
 import SwiftUI
-import BetaKit
+import BetaFeedbackKit
 
 struct ContentView: View {
-    @State private var viewModel = BetaContentViewModel(
-        feedbackQuestions: [
-            .init(
-                id: "first_impression",
-                title: "What felt most confusing in this build?",
-                helperText: "One short sentence is enough.",
-                placeholder: "E.g. \"I couldn't find where to start\""
-            ),
-            .init(
-                id: "what_helped",
-                title: "What worked better than expected?",
-                helperText: "Call out one thing.",
-                placeholder: "E.g. \"Onboarding felt much clearer\""
-            )
-        ],
-        developerProfileImageURL: URL(string: "https://your-cdn.dev/profile.jpg"), // can be your GitHub profile picture if you'd like
+    @State private var feedback = BetaContentViewModel(
         allowsFeedbackPasteboardExport: true,
         feedbackContextProvider: {
             [
-                "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
-                "build": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+                "screen": "checkout",
+                "recent_action": "Tapped Continue"
             ]
-        }
+        },
+        feedbackClarificationMode: .onDevice,
+        feedbackNotificationMode: .onScreenshot
     )
 
     var body: some View {
-        Text("HomeView")
-            .beta(
-                viewModel: viewModel,
-                backgroundMaterial: .thickMaterial,
-                foregroundCardStyle: .blue,
-                screenshotPromptTitle: "Did this screen behave how you expected?",
-                screenshotPromptSubtitle: "Take a screenshot and include one sentence about what happened."
-            )
-            .task {
-                AnalyticsManager.configure { event, info in
-                    // Forward into your analytics provider.
-                    print("Analytics:", event, info)
-                }
-                viewModel.setup()
-            }
+        CheckoutView()
+            .beta(viewModel: feedback)
+            .task { feedback.setup() }
     }
 }
 ```
 
-You can leave `feedbackQuestions` unset to use `TestFlightFeedbackQuestion.defaultQuestions`.
-If `developerProfileImageURL` is set, sheets will render your remote profile image next to the app icon.
-The `.beta` modifier preserves your view as the base content and mounts `BetaContentView` as a non-intercepting overlay. Prefer the modifier instead of wrapping your screen directly in `BetaContentView`.
+Both intelligent clarification and notification conversations are off by default.
 
-## Deep links for sheet presentation
-`BetaKit` supports deep links so host apps can open sheets from notification taps, debug tools, or internal routing.
+## Notification feedback on iOS 27
 
-Supported hosts:
-- `yourapp://beta-feedback` opens the TestFlight feedback question sheet.
-- `yourapp://beta-screenshot-tip` opens the screenshot guidance sheet.
+- The first notification asks for one text reply.
+- The on-device model may ask up to three short follow-ups. “I don’t know” ends that line of questioning.
+- With pasteboard export enabled, the finished report is copied and the tester is guided back to TestFlight to paste it.
 
-In your app's URL router:
+For example:
+
+> “Continue didn’t work.”
+
+BetaFeedbackKit might ask:
+
+> “When you tapped Continue, did the screen stay the same, or did you see an error?”
+
+The original answer, clarification, and app context are kept in the final report.
+
+### Forward notification responses
+
+Your app owns `UNUserNotificationCenter.delegate`. Forward BetaFeedbackKit notifications from that delegate:
+
 ```swift
-.onOpenURL { url in
-    if viewModel.handleDeepLink(url) {
-        return
-    }
-    // Handle your other app links.
-}
-```
-
-When using local notifications, route tap actions into these deep links (or call `handleDeepLink` directly) so the expected `BetaKit` sheet appears.
-
-## Development
-```bash
-swift build
-swift test
-```
-
-https://github.com/user-attachments/assets/df578175-e59d-4e6d-a626-9c5ac92e43aa
-
-## Foreground notification behavior (important)
-`BetaKit` schedules local notifications for screenshot tips and daily feedback prompts. If your app is active, iOS can suppress visible banners unless your app opts in to foreground presentation.
-
-In your host app:
-1. Set `UNUserNotificationCenter.current().delegate`.
-2. Implement `userNotificationCenter(_:willPresent:withCompletionHandler:)`.
-3. Return presentation options like `.banner`, `.list`, and `.sound`.
-
-Example:
-```swift
+import BetaFeedbackKit
 import UserNotifications
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        completionHandler([.banner, .list, .sound])
+        if feedbackViewModel.handleNotificationResponse(
+            response,
+            completionHandler: completionHandler
+        ) {
+            return
+        }
+
+        completionHandler()
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler:
+            @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler(
+            feedbackViewModel.notificationPresentationOptions(for: notification) ?? []
+        )
     }
 }
 ```
 
-Without this, screenshot-tip notifications may be scheduled but not visibly shown while your app stays open.
+Set the delegate during app launch and keep the same `BetaContentViewModel` available to it. Foreground banners require the `willPresent` forwarding shown above.
+
+On iOS 17–26, or when notifications cannot be used, the package falls back to normal TestFlight screenshot sharing. If Foundation Models is unavailable, the tester's first answer is still prepared without more questions.
+
+## Privacy
+
+- Foundation Models analysis runs on-device. There is no backend, API key, account, or external model provider.
+- An active conversation is stored in the host app's `UserDefaults` for up to 24 hours. It includes tester responses, captured context, generated analysis, and the finished report.
+- Notification `userInfo` contains routing IDs only. The visible notification text contains the current question, which may be generated from the supplied feedback and context.
+- An optional app-rendered screenshot stays in memory for the active conversation and is never added to the report.
+- BetaFeedbackKit analytics contain flow metadata, not tester responses.
+
+Do not place personal data, tokens, or URLs in developer context or state labels.
+
+## Advanced options
+
+- `feedbackScreenshotProvider` adds an in-memory app image for on-device analysis.
+- `.betaState(domain:state:metadata:)` adds app state. `feedbackDiagnosticsMode: .onDevice` adds privacy-filtered MetricKit evidence when available.
+- `onFeedbackPrepared` and `latestFeedbackReport` expose the finished report.
+- `beta-feedback` and `beta-screenshot-tip` are supported deep-link hosts through `handleDeepLink(_:)`.
+- `startFeedbackNotificationConversation()` starts the same flow from a debug menu or custom trigger.
+
+The package keeps the tester's original words. Generated summaries are extractive, and no reproduction steps are invented.
+
+## Development
+
+```bash
+swift build
+swift test
+```
 
 ## License
+
 MIT

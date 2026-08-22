@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "BetaKit",
+    name: "BetaFeedbackKit",
     platforms: [
         .iOS(.v17),
         .macOS(.v14)
@@ -12,19 +12,19 @@ let package = Package(
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
-            name: "BetaKit",
-            targets: ["BetaKit"]
+            name: "BetaFeedbackKit",
+            targets: ["BetaFeedbackKit"]
         ),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "BetaKit"
+            name: "BetaFeedbackKit"
         ),
         .testTarget(
-            name: "BetaKitTests",
-            dependencies: ["BetaKit"]
+            name: "BetaFeedbackKitTests",
+            dependencies: ["BetaFeedbackKit"]
         ),
     ]
 )

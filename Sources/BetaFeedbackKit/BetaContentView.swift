@@ -1,24 +1,51 @@
 //
 //  ScreenshotBetaFeedbackView.swift
-//  BetaKit
+//  BetaFeedbackKit
 //
 //  Created by Andreas Ink on 2/6/26.
 //
 
 import SwiftUI
 
+struct BetaScreenshotGuidance: Equatable {
+    let title: String
+    let message: String
+
+    static func make(
+        notificationConversationStarted: Bool,
+        notificationMode: BetaFeedbackNotificationMode,
+        customTitle: String,
+        customMessage: String
+    ) -> Self {
+        if notificationConversationStarted {
+            return Self(
+                title: "Tell me what you noticed",
+                message: "I’ll send a notification. Press and hold it, then tap Reply. The app may ask a few short questions to better understand your feedback."
+            )
+        }
+        if notificationMode == .onScreenshot {
+            return Self(
+                title: "Share through TestFlight",
+                message: "Tap the screenshot preview, then choose Share Beta Feedback."
+            )
+        }
+        return Self(title: customTitle, message: customMessage)
+    }
+}
+
 public struct BetaContentView<Content: View>: View {
-    
+
     @Bindable var viewModel: BetaContentViewModel
-    
+    @State private var screenshotConversationStarted = false
+
     var backgroundMaterial: Material?
     var backgroundCardView: Content
     var foregroundCardStyle: Color = Color.white
     var screenshotPromptTitle: String
     var screenshotPromptSubtitle: String
     var triggerAction: (() -> Void)?
-    
-    
+
+
     public init(viewModel: BetaContentViewModel,
                 backgroundMaterial: Material?,
                 foregroundCardStyle: Color = Color.white,
@@ -39,6 +66,19 @@ public struct BetaContentView<Content: View>: View {
             ZStack(alignment: .bottomLeading) {
                 Color.clear
                     .ignoresSafeArea()
+                    .allowsHitTesting(false)
+#if os(iOS)
+                screenshotPreviewAnchor
+                    .allowsHitTesting(false)
+                    .popover(
+                        isPresented: screenshotPopoverBinding,
+                        attachmentAnchor: .rect(.bounds),
+                        arrowEdge: .bottom
+                    ) {
+                        screenshotPopoverContent
+                            .presentationCompactAdaptation(.popover)
+                    }
+#else
                 if let backgroundMaterial {
                     Rectangle()
                         .foregroundStyle(backgroundMaterial)
@@ -63,8 +103,9 @@ public struct BetaContentView<Content: View>: View {
                 .scaleEffect(0.65)
                 .blur(radius: viewModel.showScreenshotOverlay ? 0 : 20)
                 .offset(x: viewModel.showScreenshotOverlay ? 0 : -100)
+                .opacity(viewModel.showScreenshotOverlay ? 1 : 0)
+#endif
             }
-            .opacity(viewModel.showScreenshotOverlay ? 1 : 0)
             .sheet(item: presentedSheetBinding) { sheet in
                 switch sheet {
                 case .testFlightFeedbackPrompt:
@@ -77,22 +118,76 @@ public struct BetaContentView<Content: View>: View {
                         .presentationDetents([.medium])
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TestFlightScreenshotTaken"))) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .betaFeedbackKitTestFlightScreenshotTaken)) { notification in
                 guard BetaContentViewModel.isDebugOrTestFlight() else { return }
+                screenshotConversationStarted =
+                    notification.userInfo?[BetaFeedbackKitScreenshotEventKey.notificationConversationStarted]
+                        as? Bool ?? false
                 withAnimation {
                     viewModel.showScreenshotOverlay = true
                 }
                 Task {
-                    try await Task.sleep(for: .seconds(6))
+                    do {
+                        try await Task.sleep(for: .seconds(6))
+                    } catch {
+                        return
+                    }
                     withAnimation {
                         viewModel.showScreenshotOverlay = false
                     }
                 }
             }
-            .allowsHitTesting(false)
             .environment(viewModel)
         }
     }
+
+#if os(iOS)
+    private var screenshotPreviewAnchor: some View {
+        Color.clear
+            .frame(width: 96, height: 172)
+            .padding(.leading, 12)
+            .padding(.bottom, 32)
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var screenshotPopoverContent: some View {
+        let guidance = BetaScreenshotGuidance.make(
+            notificationConversationStarted: screenshotConversationStarted,
+            notificationMode: viewModel.feedbackNotificationMode,
+            customTitle: screenshotPromptTitle,
+            customMessage: screenshotPromptSubtitle
+        )
+        let content = VStack(alignment: .leading, spacing: 8) {
+            Label(guidance.title, systemImage: "checkmark.circle.fill")
+                .font(.headline)
+                .symbolRenderingMode(.hierarchical)
+
+            Text(guidance.message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.leading)
+        .padding(16)
+        .frame(idealWidth: 280, maxWidth: 300, alignment: .leading)
+        .accessibilityElement(children: .combine)
+
+        if let backgroundMaterial {
+            content
+                .presentationBackground(backgroundMaterial)
+        } else {
+            content
+        }
+    }
+
+    private var screenshotPopoverBinding: Binding<Bool> {
+        Binding {
+            viewModel.showScreenshotOverlay
+        } set: { isPresented in
+            viewModel.showScreenshotOverlay = isPresented
+        }
+    }
+#endif
 
     private var presentedSheetBinding: Binding<BetaContentViewModel.PresentedSheet?> {
         Binding {
