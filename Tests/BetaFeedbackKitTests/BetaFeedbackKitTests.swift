@@ -758,6 +758,15 @@ import Testing
     #expect(BetaFeedbackNotificationIdentifiers.sourceValue == "BetaFeedbackKitConversation")
 }
 
+@Test func completionNotificationIdentifierIsScopedToConversation() {
+    let conversationID = UUID(uuidString: "94286BC2-D716-4402-B0D8-18947B8941A5")!
+
+    #expect(
+        BetaFeedbackNotificationIdentifiers.completionRequestIdentifier(for: conversationID)
+            == "dev.andreasink.BetaFeedbackKit.feedback.94286BC2-D716-4402-B0D8-18947B8941A5.completed"
+    )
+}
+
 @Test func vagueFirstResponseGetsOnePackageOwnedClarificationFallback() {
     let vague = FeedbackAnalysisInput(
         originalFeedback: "The Continue button didn't work.",

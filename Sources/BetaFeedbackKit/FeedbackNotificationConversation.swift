@@ -46,6 +46,10 @@ enum BetaFeedbackNotificationIdentifiers {
     static let schemaKey = "betafeedbackkit_schema"
     static let sourceKey = "source"
     static let sourceValue = "BetaFeedbackKitConversation"
+
+    static func completionRequestIdentifier(for conversationID: UUID) -> String {
+        "\(prefix).\(conversationID.uuidString).completed"
+    }
 }
 
 enum BetaFeedbackCompletionCopy {
@@ -338,9 +342,13 @@ public extension BetaContentViewModel {
             diagnosticContext: snapshotInput.diagnosticContext
         )
         if let previous = feedbackConversationStore.load() {
-            UNUserNotificationCenter.current().removePendingNotificationRequests(
-                withIdentifiers: [previous.pendingRequestID]
-            )
+            let center = UNUserNotificationCenter.current()
+            let previousNotificationIDs = [
+                previous.pendingRequestID,
+                BetaFeedbackNotificationIdentifiers.completionRequestIdentifier(for: previous.id)
+            ]
+            center.removePendingNotificationRequests(withIdentifiers: previousNotificationIDs)
+            center.removeDeliveredNotifications(withIdentifiers: previousNotificationIDs)
         }
         let record = BetaFeedbackConversationRecord.new(snapshot: snapshot)
         feedbackConversationStore.save(record)
@@ -834,7 +842,9 @@ enum BetaFeedbackNotificationFactory {
             "betafeedbackkit_completion": true
         ]
         return UNNotificationRequest(
-            identifier: "\(BetaFeedbackNotificationIdentifiers.prefix).\(conversationID.uuidString).completed",
+            identifier: BetaFeedbackNotificationIdentifiers.completionRequestIdentifier(
+                for: conversationID
+            ),
             content: content,
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         )
