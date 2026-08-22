@@ -572,11 +572,30 @@ import Testing
         input: performanceInput,
         maximumLength: 240
     )
+    let ambiguousAnswerInput = FeedbackAnalysisInput(
+        originalFeedback: "I can't answer this.",
+        questionID: "screenshot-feedback",
+        questionTitle: "What feedback do you have?",
+        metadata: [:],
+        developerContext: ["screen": "Practice question"]
+    )
+    let offFocusAnswerQuestion = FeedbackClarificationSanitizer.boundedModelQuestion(
+        "What content element did you expect to find?",
+        input: ambiguousAnswerInput,
+        maximumLength: 240
+    )
+    let groundedAnswerQuestion = FeedbackClarificationSanitizer.boundedModelQuestion(
+        "Is the question unclear, or are you unable to select an answer?",
+        input: ambiguousAnswerInput,
+        maximumLength: 240
+    )
 
     #expect(grounded == "When you tried Continue on Checkout, what happened?")
-    #expect(invented == "What happened after you paid for the subscription?")
-    #expect(presupposed == "Which button stopped responding?")
+    #expect(invented == nil)
+    #expect(presupposed == nil)
     #expect(diagnosticLanguage == "What specific UI element is affected by the slow performance?")
+    #expect(offFocusAnswerQuestion == nil)
+    #expect(groundedAnswerQuestion == "Is the question unclear, or are you unable to select an answer?")
 }
 
 @Test func dynamicQuestionUsesOptionsOnlyWhenItsWordingMatchesThem() {
@@ -596,6 +615,35 @@ import Testing
         preferred: .yesNo,
         question: "Did you see an error message?"
     ) == .yesNo)
+    #expect(compatibleResponseStyle(
+        preferred: .yesNo,
+        question: "Could you describe what happened?"
+    ) == .text)
+    #expect(compatibleResponseStyle(
+        preferred: .yesNo,
+        question: "Is the question unclear, or is selecting an answer not working?"
+    ) == .text)
+    #expect(compatibleResponseStyle(
+        preferred: .responsivenessScope,
+        question: "Did the whole app stop responding, or just one control?"
+    ) == .responsivenessScope)
+    #expect(compatibleResponseStyle(
+        preferred: .responsivenessScope,
+        question: "Which felt slower: the whole app or just one control?"
+    ) == .text)
+    #expect(inferredResponseStyle(for: "Did you see an error message?") == .yesNo)
+    #expect(inferredResponseStyle(for: "What error message did you see?") == .text)
+}
+
+@Test func semanticQuestionRepetitionIgnoresSmallRewordings() {
+    #expect(FeedbackQuestionRepetitionGuard.isSemanticRepeat(
+        "What happened when you tapped Continue on the Checkout screen?",
+        of: "What happened when you tapped Continue?"
+    ))
+    #expect(!FeedbackQuestionRepetitionGuard.isSemanticRepeat(
+        "What did you expect Continue to do?",
+        of: "What happened when you tapped Continue?"
+    ))
 }
 
 @Test @MainActor func feedbackDeepLinkReplacesScreenshotTipSheet() {
@@ -801,6 +849,8 @@ import Testing
     #expect(instructions.contains("everyday app user"))
     #expect(instructions.contains("one short, natural, neutral question"))
     #expect(instructions.contains("Do not repeat a question"))
+    #expect(instructions.contains("Examples illustrate decision patterns only"))
+    #expect(instructions.contains("Every concrete noun, control, action, and product relationship"))
     #expect(!instructions.localizedCaseInsensitiveContains("tester"))
     #expect(!instructions.contains("fewest possible"))
     #expect(!instructions.contains("smallest possible"))
@@ -886,6 +936,58 @@ import Testing
     ))
     #expect(!FeedbackActionabilityGuard.hasActionableSubjectiveReport(
         functionalAnswer,
+        category: .usability
+    ))
+}
+
+@Test func concreteSettingsStructureSuggestionNeedsNoClarification() {
+    let structuralSuggestion = FeedbackAnalysisInput(
+        originalFeedback: "Other settings screens would have a sub section here rather than all the elements on one screen",
+        questionID: "screenshot-feedback",
+        questionTitle: "What feedback do you have?",
+        metadata: [:],
+        developerContext: ["screen": "settings"]
+    )
+    let vagueFeedback = FeedbackAnalysisInput(
+        originalFeedback: "Settings feels confusing.",
+        questionID: "screenshot-feedback",
+        questionTitle: "What feedback do you have?",
+        metadata: [:],
+        developerContext: ["screen": "settings"]
+    )
+    let comparisonWithoutProposal = FeedbackAnalysisInput(
+        originalFeedback: "This settings page is confusing rather than simple.",
+        questionID: "screenshot-feedback",
+        questionTitle: "What feedback do you have?",
+        metadata: [:],
+        developerContext: ["screen": "settings"]
+    )
+    let negatedMove = FeedbackAnalysisInput(
+        originalFeedback: "Don't move the buttons; the page is confusing.",
+        questionID: "screenshot-feedback",
+        questionTitle: "What feedback do you have?",
+        metadata: [:],
+        developerContext: ["screen": "settings"]
+    )
+
+    #expect(FeedbackActionabilityGuard.hasConcreteProductSuggestion(
+        structuralSuggestion,
+        category: .usability
+    ))
+    #expect(!FeedbackActionabilityGuard.hasConcreteProductSuggestion(
+        structuralSuggestion,
+        category: .functionality
+    ))
+    #expect(!FeedbackActionabilityGuard.hasConcreteProductSuggestion(
+        vagueFeedback,
+        category: .usability
+    ))
+    #expect(!FeedbackActionabilityGuard.hasConcreteProductSuggestion(
+        comparisonWithoutProposal,
+        category: .usability
+    ))
+    #expect(!FeedbackActionabilityGuard.hasConcreteProductSuggestion(
+        negatedMove,
         category: .usability
     ))
 }
