@@ -9,7 +9,21 @@ It can:
 - add app, device, and developer-provided context
 - copy the finished report for TestFlight
 
-<img width="6880" height="3584" alt="BetaFeedbackKit" src="https://github.com/user-attachments/assets/9bd2e16a-a7fa-483a-8515-95f2b942c3b8" />
+## How it works
+
+```mermaid
+flowchart TD
+    A[Take a screenshot] --> B[See a quick tip]
+    B --> C{Notification arrives?}
+    C -- No --> Z[Share through TestFlight normally]
+    C -- Yes --> D[Long-press and tap Reply]
+    D --> E[Describe what happened]
+    E --> F[Answer 0–3 short follow-ups]
+    F --> G[Report is ready<br/>Copied when enabled]
+    G --> H[Tap the screenshot checkmark<br/>Share Beta Feedback<br/>Paste the report]
+```
+
+If notifications or the on-device model are unavailable, the flow shortens instead of failing.
 
 ## Install
 
