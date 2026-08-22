@@ -188,14 +188,6 @@ final class OnDeviceFeedbackDiagnosticMonitor: FeedbackDiagnosticMonitoring {
         #endif
     }
 
-    deinit {
-        #if os(iOS) && canImport(MetricKit)
-        if #available(iOS 27.0, *) {
-            (observation as? MetricKitObservation)?.task?.cancel()
-        }
-        #endif
-    }
-
     private func record(_ item: BetaFeedbackDiagnosticEvidence) {
         guard !evidence.contains(item) else { return }
         evidence.append(item)
