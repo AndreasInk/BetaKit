@@ -583,8 +583,8 @@ private struct FeedbackClarificationEvaluationTests {
         guard #available(iOS 27.0, macOS 27.0, *) else { return }
         let evaluation = ClarificationQuestionEvaluation()
         let result = try await evaluation.run(info: [
-            "dataset": "clarification-v6",
-            "prompt": "curious-ux-designer-v6"
+            "dataset": "clarification-v7",
+            "prompt": "simple-feedback-v7"
         ])
         let shape = result.aggregateValue(.mean(of: evaluation.questionShape))
         print("[BetaFeedbackKitEvals] questionShape=\(shape)")
