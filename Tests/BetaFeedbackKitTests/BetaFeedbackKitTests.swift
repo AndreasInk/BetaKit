@@ -639,6 +639,26 @@ import Testing
     #expect(disabled == .init(title: "Custom title", message: "Custom message"))
 }
 
+@Test func screenshotContextSummaryUsesHumanReadableScreenAndFeature() {
+    let summary = BetaScreenshotContextSummary.make(from: [
+        "screen_summary": "home 2.0 scaffold dashboard",
+        "screen": "home",
+        "feature": "home_experiment",
+        "has_pro": "true",
+    ])
+
+    #expect(summary?.text == "Home 2.0 scaffold dashboard · Home experiment")
+}
+
+@Test func screenshotContextSummaryOmitsPrivateOrUnknownMetadata() {
+    let summary = BetaScreenshotContextSummary.make(from: [
+        "app_version": "2.3.2",
+        "has_pro": "true",
+    ])
+
+    #expect(summary == nil)
+}
+
 @Test @MainActor func notificationConversationEnforcesOneToFourResponses() {
     let recordID = UUID(uuidString: "94286BC2-D716-4402-B0D8-18947B8941A5")!
     let snapshot = BetaFeedbackConversationSnapshot(

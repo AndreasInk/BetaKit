@@ -33,10 +33,48 @@ struct BetaScreenshotGuidance: Equatable {
     }
 }
 
+struct BetaScreenshotContextSummary: Equatable {
+    let text: String
+
+    static func make(from context: [String: String]) -> Self? {
+        let screen = firstReadableValue(
+            context["screen_summary"],
+            context["screen"]
+        )
+        let feature = readableValue(context["feature"])
+
+        if let screen {
+            if let feature,
+               screen.caseInsensitiveCompare(feature) != .orderedSame {
+                return Self(text: "\(screen) · \(feature)")
+            }
+            return Self(text: screen)
+        }
+        if let feature {
+            return Self(text: feature)
+        }
+        return nil
+    }
+
+    private static func firstReadableValue(_ values: String?...) -> String? {
+        values.compactMap(readableValue).first
+    }
+
+    private static func readableValue(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        return normalized.prefix(1).uppercased() + normalized.dropFirst()
+    }
+}
+
 public struct BetaContentView<Content: View>: View {
 
     @Bindable var viewModel: BetaContentViewModel
     @State private var screenshotConversationStarted = false
+    @State private var screenshotContext: [String: String] = [:]
 
     var backgroundMaterial: Material?
     var backgroundCardView: Content
@@ -120,6 +158,7 @@ public struct BetaContentView<Content: View>: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .betaFeedbackKitTestFlightScreenshotTaken)) { notification in
                 guard BetaContentViewModel.isDebugOrTestFlight() else { return }
+                screenshotContext = viewModel.feedbackContextProvider()
                 screenshotConversationStarted =
                     notification.userInfo?[BetaFeedbackKitScreenshotEventKey.notificationConversationStarted]
                         as? Bool ?? false
@@ -166,6 +205,13 @@ public struct BetaContentView<Content: View>: View {
             Text(guidance.message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+
+            if let context = BetaScreenshotContextSummary.make(from: screenshotContext) {
+                Divider()
+                Label(context.text, systemImage: "viewfinder")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
         }
         .multilineTextAlignment(.leading)
         .padding(16)
@@ -199,7 +245,15 @@ public struct BetaContentView<Content: View>: View {
 }
 
 #Preview {
-    @Previewable @State var viewModel = BetaContentViewModel()
+    @Previewable @State var viewModel = BetaContentViewModel(
+        feedbackContextProvider: {
+            [
+                "screen_summary": "home 2.0 scaffold dashboard",
+                "feature": "home_experiment",
+            ]
+        },
+        feedbackNotificationMode: .onScreenshot
+    )
     VStack(spacing: 12) {
         Text("Parent view remains visible")
             .font(.title2.weight(.semibold))
@@ -213,7 +267,14 @@ public struct BetaContentView<Content: View>: View {
         backgroundMaterial: .thickMaterial,
         foregroundCardStyle: .blue
     )
-    .onAppear {
-        viewModel.showScreenshotOverlay = true
+    .task {
+        try? await Task.sleep(for: .milliseconds(250))
+        NotificationCenter.default.post(
+            name: .betaFeedbackKitTestFlightScreenshotTaken,
+            object: nil,
+            userInfo: [
+                BetaFeedbackKitScreenshotEventKey.notificationConversationStarted: true
+            ]
+        )
     }
 }

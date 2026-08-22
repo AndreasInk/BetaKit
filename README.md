@@ -65,6 +65,7 @@ Both intelligent clarification and notification conversations are off by default
 
 ## Notification feedback on iOS 27
 
+- A short popover beside the screenshot preview shows the current screen or feature when supplied.
 - The first notification asks for one text reply.
 - The on-device model may ask up to three short follow-ups. “I don’t know” ends that line of questioning.
 - With pasteboard export enabled, the finished report is copied and the tester is guided back to TestFlight to paste it.
