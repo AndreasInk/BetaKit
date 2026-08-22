@@ -276,6 +276,30 @@ enum FeedbackActionabilityGuard {
             && expectedResultSignals.contains(where: text.contains)
             && frequencySignals.contains(where: text.contains)
     }
+
+    static func hasActionableSubjectiveReport(
+        _ input: FeedbackAnalysisInput,
+        category: BetaFeedbackIssueCategory
+    ) -> Bool {
+        guard [.visual, .usability, .accessibility, .content].contains(category),
+              let lastTurn = input.clarificationTurns.last else {
+            return false
+        }
+
+        let question = lastTurn.question.lowercased()
+        let subjectiveQuestionSignals = [
+            "look", "appearance", "visual", "finish", "color", "style",
+            "wording", "tone", "prefer", "clearer", "natural", "felt off",
+            "hard to use", "difficult", "confusing", "unclear", "expected to see"
+        ]
+        guard subjectiveQuestionSignals.contains(where: question.contains) else { return false }
+
+        // One substantive answer to a subjective follow-up is enough to preserve tester effort.
+        // Additional preference questions tend to restate the same request instead of changing
+        // the product decision. Functional diagnosis remains eligible for multiple turns.
+        return !lastTurn.isLowInformationResponse
+            && !lastTurn.response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 struct BetaFeedbackConversationAnalysis: Sendable, Equatable {
@@ -347,6 +371,9 @@ enum FeedbackClarificationPrompt {
         do not jump to errors, frequency, or causes. For copy, visual, content, and usability
         feedback, ask what specifically felt off or what the user would prefer. Mirror the user's
         language without intensifying it: for example, "robotic" does not imply "off-putting."
+        Once the user gives a substantive answer to a copy, visual, content, usability, or
+        accessibility follow-up, the report is actionable: return no question. Do not ask them to
+        restate the same preference with a more exact look, finish, color, wording, or style.
         When the feedback could describe either confusion or a broken interaction, ask which one
         the user means; do not silently turn "I can't" into "the app did not respond."
         If the report is already actionable, or the user already said they do not know, return no
@@ -445,7 +472,7 @@ private struct GeneratedFeedbackAnalysis {
     @Guide(description: "The broad category that best fits the reported issue")
     var category: GeneratedFeedbackIssueCategory
 
-    @Guide(description: "True for vague negative feedback when one answer would help, including slow, confusing, hard to use, looks wrong, or does not make sense; false for clear positive feedback and false when a functional report already states the action, observed result, expected result, and frequency")
+    @Guide(description: "True for vague negative feedback when one answer would help, including slow, confusing, hard to use, looks wrong, or does not make sense; false for clear positive feedback, false after a substantive answer to a visual, content, usability, or accessibility follow-up, and false when a functional report already states the action, observed result, expected result, and frequency")
     var needsClarification: Bool
 
     @Guide(description: "The single detail that is actually missing; never select a detail already stated in feedback or history; prefer userGoal, confusingPart, preferredChange, or visualExpectation for usability, copy, content, and visual feedback; use none when the report already gives action, observed result, expected result, and frequency")
@@ -477,10 +504,15 @@ private struct GeneratedFeedbackAnalysis {
             input,
             category: category
         )
+        let subjectiveReportIsActionable = FeedbackActionabilityGuard.hasActionableSubjectiveReport(
+            input,
+            category: category
+        )
         let shouldAsk = needsClarification
             && clarificationFocus.question != nil
             && !cleanQuestion.isEmpty
             && !reportIsComplete
+            && !subjectiveReportIsActionable
 
         return BetaFeedbackClarificationAnalysis(
             summary: safeSummary,

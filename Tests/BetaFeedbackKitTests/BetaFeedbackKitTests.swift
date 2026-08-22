@@ -810,6 +810,59 @@ import Testing
     ))
 }
 
+@Test func substantiveSubjectiveAnswerStopsPreferenceRephrasing() {
+    let visualPreference = FeedbackAnalysisInput(
+        originalFeedback: "The new card isn't as glassy as it was.",
+        questionID: "screenshot-feedback",
+        questionTitle: "What feedback do you have?",
+        metadata: [:],
+        developerContext: ["screen": "home"],
+        clarificationTurns: [
+            .init(
+                question: "How would you describe the exact look you noticed—or any changes you'd like to see?",
+                response: "The card is more flat, it should use Liquid Glass so it reflects the blue above it."
+            )
+        ]
+    )
+    let uncertainPreference = FeedbackAnalysisInput(
+        originalFeedback: "The wording feels robotic.",
+        questionID: "screenshot-feedback",
+        questionTitle: "What feedback do you have?",
+        metadata: [:],
+        developerContext: [:],
+        clarificationTurns: [
+            .init(question: "What wording would feel more natural?", response: "Not sure")
+        ]
+    )
+    let functionalAnswer = FeedbackAnalysisInput(
+        originalFeedback: "The card didn't work.",
+        questionID: "screenshot-feedback",
+        questionTitle: "What feedback do you have?",
+        metadata: [:],
+        developerContext: [:],
+        clarificationTurns: [
+            .init(question: "What happened when you tapped the card?", response: "Nothing happened")
+        ]
+    )
+
+    #expect(FeedbackActionabilityGuard.hasActionableSubjectiveReport(
+        visualPreference,
+        category: .visual
+    ))
+    #expect(!FeedbackActionabilityGuard.hasActionableSubjectiveReport(
+        visualPreference,
+        category: .functionality
+    ))
+    #expect(!FeedbackActionabilityGuard.hasActionableSubjectiveReport(
+        uncertainPreference,
+        category: .content
+    ))
+    #expect(!FeedbackActionabilityGuard.hasActionableSubjectiveReport(
+        functionalAnswer,
+        category: .usability
+    ))
+}
+
 @Test @MainActor func notificationReplyOnlyAcceptsThePendingResponseStyle() {
     let yesNo = BetaFeedbackConversationQuestion(text: "Did you see an error?", responseStyle: .yesNo)
     let text = BetaFeedbackConversationQuestion(text: "What happened?", responseStyle: .text)

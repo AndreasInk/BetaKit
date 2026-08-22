@@ -72,6 +72,19 @@ private struct ClarificationQuestionEvaluation: Evaluation {
             expectedBehavior: "Ask what looks off or what the user expected to see without inventing a specific visual defect or interface element."
         ),
         Case(
+            feedback: "The new card isn't as glassy as it was.",
+            developerContext: ["screen": "Home", "feature": "home_experiment"],
+            clarificationTurns: [
+                BetaFeedbackClarificationTurn(
+                    question: "How would you describe the exact look you noticed—or any changes you'd like to see?",
+                    response: "The card is more flat, it should use Liquid Glass so it reflects the blue above it."
+                )
+            ],
+            screenshotName: nil,
+            visualContext: nil,
+            expectedBehavior: "Return no question because the user already described both the visual problem and the preferred Liquid Glass appearance. Do not ask for another description of the look, finish, color, clarity, or style."
+        ),
+        Case(
             feedback: "After I tapped Continue on checkout, the app showed error 42 every time instead of opening confirmation.",
             developerContext: ["screen": "Checkout"],
             clarificationTurns: [],
@@ -313,8 +326,8 @@ private struct FeedbackClarificationEvaluationTests {
         guard #available(iOS 27.0, macOS 27.0, *) else { return }
         let evaluation = ClarificationQuestionEvaluation()
         let result = try await evaluation.run(info: [
-            "dataset": "clarification-v1",
-            "prompt": "curious-ux-designer-v1"
+            "dataset": "clarification-v2",
+            "prompt": "curious-ux-designer-v2"
         ])
         let shape = result.aggregateValue(.mean(of: evaluation.questionShape))
         let quality = result.aggregateValue(.mean(of: evaluation.questionQuality))
