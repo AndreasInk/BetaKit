@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Mission
-BetaKit is an open source SwiftUI package that helps TestFlight beta testers share better feedback with less friction.
+BetaFeedbackKit is an open source SwiftUI package that helps TestFlight beta testers share better feedback with less friction.
 
 ## What to optimize for
 - Fast, low-effort tester feedback capture
@@ -10,9 +10,9 @@ BetaKit is an open source SwiftUI package that helps TestFlight beta testers sha
 - Safe defaults for package consumers
 
 ## Repository basics
-- Package name: `BetaKit`
-- Main source target: `Sources/BetaKit`
-- Tests: `Tests/BetaKItTests`
+- Package name: `BetaFeedbackKit`
+- Main source target: `Sources/BetaFeedbackKit`
+- Tests: `Tests/BetaFeedbackKitTests`
 - Minimum platforms:
   - iOS 17+
   - macOS 14+
