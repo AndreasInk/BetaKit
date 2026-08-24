@@ -94,7 +94,9 @@ private struct DemoSettingsView: View {
             }
             .formStyle(.grouped)
             .navigationTitle("Settings Demo")
+#if os(macOS)
             .frame(minWidth: 520, minHeight: 520)
+#endif
         }
         .beta(viewModel: feedback)
         .task {

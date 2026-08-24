@@ -22,7 +22,6 @@ targets:
       base:
         CODE_SIGN_STYLE: Automatic
         CURRENT_PROJECT_VERSION: 1
-        DEVELOPMENT_TEAM: 9NG3C5HP77
         GENERATE_INFOPLIST_FILE: YES
         MARKETING_VERSION: 1.0
         PRODUCT_BUNDLE_IDENTIFIER: dev.andreasink.BetaFeedbackDemo

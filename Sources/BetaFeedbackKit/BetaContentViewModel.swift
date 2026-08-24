@@ -9,11 +9,17 @@ import SwiftUI
 @preconcurrency import UserNotifications
 import Darwin
 import CoreGraphics
+import OSLog
 #if os(iOS)
 import UIKit
 #elseif os(macOS)
 import AppKit
 #endif
+
+private let betaFeedbackScreenshotLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "dev.andreasink.BetaFeedbackKit",
+    category: "BetaFeedbackKitScreenshot"
+)
 
 extension Notification.Name {
     static let betaFeedbackKitTestFlightScreenshotTaken = Notification.Name(
@@ -23,6 +29,33 @@ extension Notification.Name {
 
 enum BetaFeedbackKitScreenshotEventKey {
     static let notificationConversationStarted = "notificationConversationStarted"
+}
+
+enum BetaFeedbackNotificationTiming {
+    static let initialDelay: TimeInterval = 1
+}
+
+struct BetaScreenshotBackgroundLaunchGate {
+    private(set) var screenshotCapturedAt: Date?
+
+    mutating func recordScreenshot(at date: Date = .now) {
+        screenshotCapturedAt = date
+    }
+
+    mutating func discardScreenshot() {
+        screenshotCapturedAt = nil
+    }
+
+    mutating func consumeBackgroundTransition(
+        at date: Date = .now,
+        maximumDelay: TimeInterval = 30
+    ) -> Bool {
+        guard let screenshotCapturedAt else { return false }
+        self.screenshotCapturedAt = nil
+
+        let elapsed = date.timeIntervalSince(screenshotCapturedAt)
+        return elapsed >= 0 && elapsed <= maximumDelay
+    }
 }
 
 private final class BetaNotificationObserverToken: @unchecked Sendable {
@@ -102,6 +135,9 @@ public final class BetaContentViewModel {
     @ObservationIgnored var feedbackDiagnosticMonitor: any FeedbackDiagnosticMonitoring = OnDeviceFeedbackDiagnosticMonitor()
     @ObservationIgnored private var betaStateRegistrations: [String: [BetaFeedbackStateRegistration]] = [:]
     @ObservationIgnored private var screenshotObserverToken: BetaNotificationObserverToken?
+    @ObservationIgnored private var applicationBackgroundObserverToken: BetaNotificationObserverToken?
+    @ObservationIgnored private var screenshotBackgroundLaunchGate = BetaScreenshotBackgroundLaunchGate()
+    @ObservationIgnored private var screenshotNotificationAuthorizationReady = false
     #if os(iOS)
     @ObservationIgnored var activeConversationScreenshot: (id: UUID, image: CGImage)?
     #endif
@@ -194,30 +230,39 @@ public final class BetaContentViewModel {
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let notificationConversationStarted: Bool
-                    if self.feedbackNotificationMode == .onScreenshot {
-                        if #available(iOS 27.0, *) {
-                            notificationConversationStarted = await self.startFeedbackNotificationConversation()
-                        } else {
-                            Self.scheduleTestFlightScreenshotTipNotificationInternal()
-                            notificationConversationStarted = false
-                        }
-                    } else {
-                        Self.scheduleTestFlightScreenshotTipNotificationInternal()
-                        notificationConversationStarted = false
-                    }
-                    self.screenshotNotificationConversationStarted = notificationConversationStarted
-                    NotificationCenter.default.post(
-                        name: .betaFeedbackKitTestFlightScreenshotTaken,
-                        object: nil,
-                        userInfo: [
-                            BetaFeedbackKitScreenshotEventKey.notificationConversationStarted:
-                                notificationConversationStarted
-                        ]
+                    self.screenshotBackgroundLaunchGate.recordScreenshot()
+                    self.screenshotNotificationAuthorizationReady = false
+                    betaFeedbackScreenshotLogger.info(
+                        "Screenshot captured; waiting for app background before notification"
                     )
+                    guard await self.ensureFeedbackNotificationAuthorization() else {
+                        self.screenshotBackgroundLaunchGate.discardScreenshot()
+                        self.postScreenshotEvent(notificationConversationStarted: false)
+                        return
+                    }
+                    if self.feedbackNotificationMode == .onScreenshot,
+                       #available(iOS 27.0, *) {
+                        await self.registerFeedbackNotificationCategories()
+                    }
+                    self.screenshotNotificationAuthorizationReady = true
+                    if UIApplication.shared.applicationState == .background {
+                        await self.startPendingScreenshotNotificationAfterBackground()
+                    }
                 }
             }
             screenshotObserverToken = BetaNotificationObserverToken(token)
+        }
+        if applicationBackgroundObserverToken == nil {
+            let token = NotificationCenter.default.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    await self?.startPendingScreenshotNotificationAfterBackground()
+                }
+            }
+            applicationBackgroundObserverToken = BetaNotificationObserverToken(token)
         }
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -248,6 +293,18 @@ public final class BetaContentViewModel {
         }
     }
 
+    func ensureFeedbackNotificationAuthorization() async -> Bool {
+        switch await authorizationStatus() {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        case .notDetermined:
+            return await requestAuthorization()
+        case .denied:
+            return false
+        @unknown default:
+            return false
+        }
+    }
 
     public func scheduleDailyTestFlightFeedbackReminder() {
         guard Self.isDebugOrTestFlight() else { return }
@@ -304,7 +361,10 @@ public final class BetaContentViewModel {
         content.sound = .default
         content.userInfo = ["source": "testFlightScreenshotTip"]
 
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: BetaFeedbackNotificationTiming.initialDelay,
+            repeats: false
+        )
         let request = UNNotificationRequest(
             identifier: "testFlightScreenshotTip",
             content: content,
@@ -319,6 +379,43 @@ public final class BetaContentViewModel {
         }
         return "Tap Done → Share Beta Feedback."
     }
+
+    #if os(iOS)
+    private func startPendingScreenshotNotificationAfterBackground() async {
+        guard screenshotNotificationAuthorizationReady,
+              screenshotBackgroundLaunchGate.consumeBackgroundTransition() else { return }
+        screenshotNotificationAuthorizationReady = false
+        betaFeedbackScreenshotLogger.info(
+            "App entered background after screenshot; starting notification flow"
+        )
+
+        let notificationConversationStarted: Bool
+        if feedbackNotificationMode == .onScreenshot {
+            if #available(iOS 27.0, *) {
+                notificationConversationStarted = await startFeedbackNotificationConversation()
+            } else {
+                Self.scheduleTestFlightScreenshotTipNotificationInternal()
+                notificationConversationStarted = false
+            }
+        } else {
+            Self.scheduleTestFlightScreenshotTipNotificationInternal()
+            notificationConversationStarted = false
+        }
+        postScreenshotEvent(notificationConversationStarted: notificationConversationStarted)
+    }
+
+    private func postScreenshotEvent(notificationConversationStarted: Bool) {
+        screenshotNotificationConversationStarted = notificationConversationStarted
+        NotificationCenter.default.post(
+            name: .betaFeedbackKitTestFlightScreenshotTaken,
+            object: nil,
+            userInfo: [
+                BetaFeedbackKitScreenshotEventKey.notificationConversationStarted:
+                    notificationConversationStarted
+            ]
+        )
+    }
+    #endif
 
     @discardableResult
     public func copyFeedbackToPasteboard(answer: String, questionId: String, questionTitle: String) -> Bool {

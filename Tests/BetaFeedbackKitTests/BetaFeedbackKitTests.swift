@@ -499,14 +499,14 @@ import Testing
     #expect(!prompt.contains("checkout&quot; injected=&quot;true"))
 }
 
-@Test @MainActor func clarificationSanitizerKeepsAtMostOneQuestion() {
-    let question = FeedbackClarificationSanitizer.singleQuestion(
-        "Did nothing happen? Did an error appear?",
+@Test @MainActor func clarificationSanitizerOnlyAppliesMechanicalBounds() {
+    let clarification = FeedbackClarificationSanitizer.boundedModelQuestion(
+        "  Please describe what happened.\n",
         maximumLength: 240
     )
 
-    #expect(question == "Did nothing happen?")
-    #expect(question.filter { $0 == "?" }.count == 1)
+    #expect(clarification == "Please describe what happened.")
+    #expect(FeedbackClarificationSanitizer.boundedModelQuestion("  ", maximumLength: 240) == nil)
 }
 
 @Test func dynamicClarificationOnlyAppliesMechanicalQuestionBounds() {
@@ -534,8 +534,8 @@ import Testing
     #expect(firstQuestion == "When you tried Continue on Checkout, what happened?")
     #expect(invented == "What happened after you paid for the subscription?")
     #expect(presupposed == "Which button stopped responding?")
-    #expect(multiple == "What happened?")
-    #expect(statement == nil)
+    #expect(multiple == "What happened? Did an error appear?")
+    #expect(statement == "Please describe what happened.")
 }
 
 @Test @MainActor func feedbackDeepLinkReplacesScreenshotTipSheet() {
@@ -579,6 +579,51 @@ import Testing
     #expect(vm.feedbackNotificationMode == .disabled)
 }
 
+@Test func screenshotNotificationWaitsForANearbyBackgroundTransition() {
+    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
+    var gate = BetaScreenshotBackgroundLaunchGate()
+
+    let launchedWithoutScreenshot = gate.consumeBackgroundTransition(at: screenshotDate)
+    #expect(!launchedWithoutScreenshot)
+
+    gate.recordScreenshot(at: screenshotDate)
+
+    let launchedAfterBackground = gate.consumeBackgroundTransition(
+        at: screenshotDate.addingTimeInterval(1)
+    )
+    let launchedTwice = gate.consumeBackgroundTransition(
+        at: screenshotDate.addingTimeInterval(2)
+    )
+    #expect(launchedAfterBackground)
+    #expect(!launchedTwice)
+    #expect(BetaFeedbackNotificationTiming.initialDelay == 1)
+}
+
+@Test func staleScreenshotDoesNotLaunchANotificationWhenAppBackgroundsLater() {
+    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
+    var gate = BetaScreenshotBackgroundLaunchGate()
+    gate.recordScreenshot(at: screenshotDate)
+
+    let launchedAfterStaleTransition = gate.consumeBackgroundTransition(
+        at: screenshotDate.addingTimeInterval(31)
+    )
+    #expect(!launchedAfterStaleTransition)
+    #expect(gate.screenshotCapturedAt == nil)
+}
+
+@Test func deniedNotificationPermissionCanDiscardPendingScreenshot() {
+    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
+    var gate = BetaScreenshotBackgroundLaunchGate()
+    gate.recordScreenshot(at: screenshotDate)
+
+    gate.discardScreenshot()
+    let launchedAfterDenial = gate.consumeBackgroundTransition(
+        at: screenshotDate.addingTimeInterval(1)
+    )
+
+    #expect(!launchedAfterDenial)
+}
+
 @Test func screenshotGuidanceFallsBackWithoutPromisingANotification() {
     let notification = BetaScreenshotGuidance.make(
         notificationConversationStarted: true,
@@ -600,7 +645,7 @@ import Testing
     )
 
     #expect(notification.title == "Tell me what you noticed")
-    #expect(notification.message == "Press and hold the notification, then tap Reply. Answer a few short questions to help improve the app.")
+    #expect(notification.message == "Press and hold the notification, then tap Reply. The app may ask one optional follow-up to help improve the app.")
     #expect(unavailable.title == "Share through TestFlight")
     #expect(!unavailable.message.localizedCaseInsensitiveContains("notification"))
     #expect(disabled == .init(title: "Custom title", message: "Custom message"))
@@ -662,6 +707,40 @@ import Testing
     #expect(record.analysisInput()?.clarificationTurns == [
         .init(question: "What happened next?", response: "The screen stayed the same.")
     ])
+}
+
+@Test @MainActor func repeatedScreenshotRejectsEarlierAnalysisAndCleanup() {
+    let store = TestFeedbackConversationStore()
+    let viewModel = BetaContentViewModel()
+    viewModel.feedbackConversationStore = store
+
+    var earlier = BetaFeedbackConversationRecord.new(
+        id: UUID(uuidString: "94286BC2-D716-4402-B0D8-18947B8941A5")!,
+        snapshot: testFeedbackConversationSnapshot
+    )
+    let acceptedEarlier = earlier.acceptResponse("The first screenshot looked wrong.")
+    #expect(acceptedEarlier)
+    store.save(earlier)
+
+    let newer = BetaFeedbackConversationRecord.new(
+        id: UUID(uuidString: "E75EFED2-DF89-4A8F-9439-C37C0F6E2E52")!,
+        snapshot: testFeedbackConversationSnapshot
+    )
+    store.save(newer)
+
+    earlier.analysis = .init(
+        summary: "The first screenshot looked wrong.",
+        category: .visual,
+        needsClarification: true,
+        clarificationQuestion: "What looked wrong?"
+    )
+    earlier.awaitNextQuestion(.init(text: "What looked wrong?", responseStyle: .text))
+    let savedEarlierResult = viewModel.saveFeedbackConversationIfCurrent(earlier)
+    let clearedEarlierResult = viewModel.clearFeedbackConversationIfCurrent(earlier)
+
+    #expect(!savedEarlierResult)
+    #expect(!clearedEarlierResult)
+    #expect(store.load() == newer)
 }
 
 @Test func lowInformationClarificationResponsesEndThatLineOfInquiry() {
@@ -819,7 +898,7 @@ import Testing
 }
 
 @Test func clarificationPromptUsesOneNeutralUserCenteredPolicy() {
-    #expect(FeedbackClarificationPrompt.instructions == "Given abstract feedback on an iOS app, learn from the user by asking questions about the user's feedback so the developer can more easily implement the user's feedback.")
+    #expect(FeedbackClarificationPrompt.instructions == "Ask one short follow-up grounded in the tester's words, without inventing details.")
 }
 
 @Test @MainActor func notificationReplyOnlyAcceptsThePendingResponseStyle() {
@@ -1010,6 +1089,32 @@ private struct FailingIfInvokedAnalyzer: FeedbackAnalyzing {
         return nil
     }
 }
+
+@MainActor
+private final class TestFeedbackConversationStore: BetaFeedbackConversationStoring {
+    private var record: BetaFeedbackConversationRecord?
+
+    func load() -> BetaFeedbackConversationRecord? {
+        record
+    }
+
+    func save(_ record: BetaFeedbackConversationRecord) {
+        self.record = record
+    }
+
+    func clear() {
+        record = nil
+    }
+}
+
+private let testFeedbackConversationSnapshot = BetaFeedbackConversationSnapshot(
+    questionID: "screenshot-feedback",
+    questionTitle: "What feedback do you have?",
+    metadata: [:],
+    developerContext: [:],
+    activeStates: [],
+    diagnosticContext: .disabled
+)
 
 private struct StateTransition: Equatable {
     let domain: String

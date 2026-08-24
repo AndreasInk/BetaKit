@@ -76,6 +76,7 @@ tokens, private URLs, or speculative causes.
 ## Notification feedback on iOS 27
 
 - A short popover beside the screenshot preview shows the current screen or feature when supplied.
+- Opening the system screenshot preview backgrounds the app; BetaFeedbackKit detects that transition and schedules the first notification for one second later.
 - The first notification asks for one text reply.
 - The on-device model may ask one short follow-up. After the tester answers or skips it, the report is complete.
 - With pasteboard export enabled, the finished report is copied and the tester is guided back to TestFlight to paste it.

@@ -8,13 +8,13 @@ let package = Package(
         .macOS(.v14)
     ],
     dependencies: [
-        .package(path: "../..")
+        .package(name: "BetaFeedbackKit", path: "../..")
     ],
     targets: [
         .executableTarget(
             name: "BetaFeedbackDemo",
             dependencies: [
-                .product(name: "BetaFeedbackKit", package: "BetaKit")
+                .product(name: "BetaFeedbackKit", package: "BetaFeedbackKit")
             ]
         )
     ]

@@ -348,7 +348,7 @@ struct OnDeviceFeedbackAnalyzer: FeedbackAnalyzing, FeedbackConversationAnalyzin
 
 enum FeedbackClarificationPrompt {
     static let instructions = """
-        Given abstract feedback on an iOS app, learn from the user by asking questions about the user's feedback so the developer can more easily implement the user's feedback.
+        Ask one short follow-up grounded in the tester's words, without inventing details.
         """
 }
 
@@ -448,27 +448,23 @@ private struct GeneratedFeedbackAnalysis {
     @Guide(description: "Briefly assess whether one important actionable detail is still missing")
     var reasoning: String
 
-    var clarificationStatus: GeneratedClarificationStatus
-
-    @Guide(description: "Nil when complete; otherwise one short neutral question about the missing detail; never ask for secrets")
-    var clarificationQuestion: String?
+    @Guide(description: "One short follow-up for the tester")
+    var clarificationQuestion: String
 
     var category: GeneratedFeedbackIssueCategory
 
     #if DEBUG
     func debugLog(label: String) -> String {
-        "[BetaFeedbackKitLLM][\(label)] reasoning=\(reasoning) status=\(String(describing: clarificationStatus)) question=\(clarificationQuestion ?? "<none>") category=\(String(describing: category))"
+        "[BetaFeedbackKitLLM][\(label)] reasoning=\(reasoning) question=\(clarificationQuestion) category=\(String(describing: category))"
     }
     #endif
 
     func sanitizedAnalysis(using input: FeedbackAnalysisInput) -> BetaFeedbackClarificationAnalysis {
-        let proposedQuestion = clarificationQuestion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let modelQuestion = clarificationStatus == .complete
-            ? nil
-            : FeedbackClarificationSanitizer.boundedModelQuestion(
-                proposedQuestion,
-                maximumLength: 240
-            )
+        let proposedQuestion = clarificationQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelQuestion = FeedbackClarificationSanitizer.boundedModelQuestion(
+            proposedQuestion,
+            maximumLength: 240
+        )
         let cleanQuestion = modelQuestion ?? ""
         let category = category.issueCategory
         let shouldAsk = !cleanQuestion.isEmpty
@@ -504,13 +500,6 @@ private struct GeneratedFeedbackAnalysis {
             decisionSource: nextQuestion == nil ? .none : .model
         )
     }
-}
-
-@available(iOS 26.0, macOS 26.0, *)
-@Generable(description: "Whether one more answer is needed")
-private enum GeneratedClarificationStatus: Equatable {
-    case complete
-    case needsClarification
 }
 
 @available(iOS 26.0, macOS 26.0, *)
@@ -570,21 +559,12 @@ enum FeedbackAnalysisPrompt {
 }
 
 enum FeedbackClarificationSanitizer {
-    static func singleQuestion(_ value: String, maximumLength: Int) -> String {
-        let singleLine = value.cleanedSingleLine(maximumLength: maximumLength)
-        guard let firstQuestionMark = singleLine.firstIndex(of: "?") else {
-            return singleLine
-        }
-        return String(singleLine[...firstQuestionMark])
-    }
-
     static func boundedModelQuestion(
         _ value: String,
         maximumLength: Int
     ) -> String? {
-        let question = singleQuestion(value, maximumLength: maximumLength)
-        guard !question.isEmpty, question.hasSuffix("?") else { return nil }
-        return question
+        let clarification = value.cleanedSingleLine(maximumLength: maximumLength)
+        return clarification.isEmpty ? nil : clarification
     }
 }
 
