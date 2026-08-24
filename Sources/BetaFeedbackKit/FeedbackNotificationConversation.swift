@@ -521,7 +521,7 @@ public extension BetaContentViewModel {
                         name: .betaFeedbackKitTestFlightScreenshotTaken,
                         object: nil,
                         userInfo: [
-                            BetaFeedbackKitScreenshotEventKey.notificationConversationStarted: true
+                            BetaFeedbackKitScreenshotEventKey.notificationConversationExpected: true
                         ]
                     )
                     betaFeedbackConversationLogger.info(

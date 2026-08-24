@@ -12,12 +12,12 @@ struct BetaScreenshotGuidance: Equatable {
     let message: String
 
     static func make(
-        notificationConversationStarted: Bool,
+        notificationConversationExpected: Bool,
         notificationMode: BetaFeedbackNotificationMode,
         customTitle: String,
         customMessage: String
     ) -> Self {
-        if notificationConversationStarted {
+        if notificationConversationExpected {
             return Self(
                 title: "Tell me what you noticed",
                 message: "Press and hold the notification, then tap Reply. The app may ask one optional follow-up to help improve the app."
@@ -104,6 +104,7 @@ public struct BetaContentView<Content: View>: View {
 
     @Bindable var viewModel: BetaContentViewModel
     @State private var screenshotContext: [String: String] = [:]
+    @State private var screenshotOverlayDismissalID = 0
 
     var backgroundMaterial: Material?
     var backgroundCardView: Content
@@ -185,21 +186,28 @@ public struct BetaContentView<Content: View>: View {
                         .presentationDetents([.medium])
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .betaFeedbackKitTestFlightScreenshotTaken)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .betaFeedbackKitTestFlightScreenshotTaken)) { notification in
                 guard BetaContentViewModel.isDebugOrTestFlight() else { return }
+                if let notificationConversationExpected = notification.userInfo?[
+                    BetaFeedbackKitScreenshotEventKey.notificationConversationExpected
+                ] as? Bool {
+                    viewModel.screenshotNotificationConversationExpected = notificationConversationExpected
+                }
                 screenshotContext = viewModel.feedbackContextProvider()
                 withAnimation {
                     viewModel.showScreenshotOverlay = true
                 }
-                Task {
-                    do {
-                        try await Task.sleep(for: .seconds(6))
-                    } catch {
-                        return
-                    }
-                    withAnimation {
-                        viewModel.showScreenshotOverlay = false
-                    }
+                screenshotOverlayDismissalID &+= 1
+            }
+            .task(id: screenshotOverlayDismissalID) {
+                guard screenshotOverlayDismissalID > 0 else { return }
+                do {
+                    try await Task.sleep(for: .seconds(6))
+                } catch {
+                    return
+                }
+                withAnimation {
+                    viewModel.showScreenshotOverlay = false
                 }
             }
             .environment(viewModel)
@@ -218,7 +226,7 @@ public struct BetaContentView<Content: View>: View {
     @ViewBuilder
     private var screenshotPopoverContent: some View {
         let guidance = BetaScreenshotGuidance.make(
-            notificationConversationStarted: viewModel.screenshotNotificationConversationStarted,
+            notificationConversationExpected: viewModel.screenshotNotificationConversationExpected,
             notificationMode: viewModel.feedbackNotificationMode,
             customTitle: screenshotPromptTitle,
             customMessage: screenshotPromptSubtitle
@@ -277,7 +285,7 @@ public struct BetaContentView<Content: View>: View {
             name: .betaFeedbackKitTestFlightScreenshotTaken,
             object: nil,
             userInfo: [
-                BetaFeedbackKitScreenshotEventKey.notificationConversationStarted: true
+                BetaFeedbackKitScreenshotEventKey.notificationConversationExpected: true
             ]
         )
     }
@@ -286,7 +294,7 @@ public struct BetaContentView<Content: View>: View {
 #Preview("Screenshot popover") {
     BetaScreenshotPopoverView(
         guidance: BetaScreenshotGuidance.make(
-            notificationConversationStarted: true,
+            notificationConversationExpected: true,
             notificationMode: .onScreenshot,
             customTitle: "",
             customMessage: ""

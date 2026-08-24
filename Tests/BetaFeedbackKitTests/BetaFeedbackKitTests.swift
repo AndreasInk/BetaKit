@@ -583,17 +583,27 @@ import Testing
     let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
     var gate = BetaScreenshotBackgroundLaunchGate()
 
-    let launchedWithoutScreenshot = gate.consumeBackgroundTransition(at: screenshotDate)
+    let launchedWithoutScreenshot = gate.consumeBackgroundTransition(
+        for: gate.currentScreenshotGeneration,
+        at: screenshotDate
+    )
     #expect(!launchedWithoutScreenshot)
 
-    gate.recordScreenshot(at: screenshotDate)
+    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
 
+    let presentedGuidance = gate.consumeGuidancePresentation(
+        for: screenshotGeneration,
+        isApplicationBackgrounded: false
+    )
     let launchedAfterBackground = gate.consumeBackgroundTransition(
+        for: screenshotGeneration,
         at: screenshotDate.addingTimeInterval(1)
     )
     let launchedTwice = gate.consumeBackgroundTransition(
+        for: screenshotGeneration,
         at: screenshotDate.addingTimeInterval(2)
     )
+    #expect(presentedGuidance)
     #expect(launchedAfterBackground)
     #expect(!launchedTwice)
     #expect(BetaFeedbackNotificationTiming.initialDelay == 1)
@@ -602,9 +612,10 @@ import Testing
 @Test func staleScreenshotDoesNotLaunchANotificationWhenAppBackgroundsLater() {
     let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
     var gate = BetaScreenshotBackgroundLaunchGate()
-    gate.recordScreenshot(at: screenshotDate)
+    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
 
     let launchedAfterStaleTransition = gate.consumeBackgroundTransition(
+        for: screenshotGeneration,
         at: screenshotDate.addingTimeInterval(31)
     )
     #expect(!launchedAfterStaleTransition)
@@ -614,31 +625,115 @@ import Testing
 @Test func deniedNotificationPermissionCanDiscardPendingScreenshot() {
     let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
     var gate = BetaScreenshotBackgroundLaunchGate()
-    gate.recordScreenshot(at: screenshotDate)
+    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
 
-    gate.discardScreenshot()
+    gate.discardScreenshot(for: screenshotGeneration)
     let launchedAfterDenial = gate.consumeBackgroundTransition(
+        for: screenshotGeneration,
         at: screenshotDate.addingTimeInterval(1)
+    )
+    let presentedAfterDenial = gate.consumeGuidancePresentation(
+        for: screenshotGeneration,
+        isApplicationBackgrounded: false
     )
 
     #expect(!launchedAfterDenial)
+    #expect(!presentedAfterDenial)
+}
+
+@Test func screenshotGuidanceDoesNotWaitForTheBackgroundNotificationFlow() {
+    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
+    var gate = BetaScreenshotBackgroundLaunchGate()
+    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
+
+    let firstPresentation = gate.consumeGuidancePresentation(
+        for: screenshotGeneration,
+        isApplicationBackgrounded: false
+    )
+    let repeatedPresentation = gate.consumeGuidancePresentation(
+        for: screenshotGeneration,
+        isApplicationBackgrounded: false
+    )
+    let launchedAfterBackground = gate.consumeBackgroundTransition(
+        for: screenshotGeneration,
+        at: screenshotDate.addingTimeInterval(1)
+    )
+
+    #expect(firstPresentation)
+    #expect(!repeatedPresentation)
+    #expect(launchedAfterBackground)
+}
+
+@Test func screenshotGuidanceIsNotDeferredAcrossABackgroundTransition() {
+    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
+    var gate = BetaScreenshotBackgroundLaunchGate()
+    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
+
+    let presentedWhileBackgrounded = gate.consumeGuidancePresentation(
+        for: screenshotGeneration,
+        isApplicationBackgrounded: true
+    )
+    let presentedAfterForegrounding = gate.consumeGuidancePresentation(
+        for: screenshotGeneration,
+        isApplicationBackgrounded: false
+    )
+    let launchedAfterBackground = gate.consumeBackgroundTransition(
+        for: screenshotGeneration,
+        at: screenshotDate.addingTimeInterval(1)
+    )
+
+    #expect(!presentedWhileBackgrounded)
+    #expect(!presentedAfterForegrounding)
+    #expect(launchedAfterBackground)
+}
+
+@Test func supersededScreenshotCannotConsumeTheLatestScreenshotWork() {
+    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
+    var gate = BetaScreenshotBackgroundLaunchGate()
+    let earlierGeneration = gate.recordScreenshot(at: screenshotDate)
+    let latestGeneration = gate.recordScreenshot(
+        at: screenshotDate.addingTimeInterval(0.1)
+    )
+
+    gate.discardScreenshot(for: earlierGeneration)
+    let stalePresentation = gate.consumeGuidancePresentation(
+        for: earlierGeneration,
+        isApplicationBackgrounded: false
+    )
+    let staleBackgroundLaunch = gate.consumeBackgroundTransition(
+        for: earlierGeneration,
+        at: screenshotDate.addingTimeInterval(1)
+    )
+    let latestPresentation = gate.consumeGuidancePresentation(
+        for: latestGeneration,
+        isApplicationBackgrounded: false
+    )
+    let latestBackgroundLaunch = gate.consumeBackgroundTransition(
+        for: latestGeneration,
+        at: screenshotDate.addingTimeInterval(1)
+    )
+
+    #expect(!stalePresentation)
+    #expect(!staleBackgroundLaunch)
+    #expect(latestPresentation)
+    #expect(latestBackgroundLaunch)
 }
 
 @Test func screenshotGuidanceFallsBackWithoutPromisingANotification() {
     let notification = BetaScreenshotGuidance.make(
-        notificationConversationStarted: true,
+        notificationConversationExpected: true,
         notificationMode: .onScreenshot,
         customTitle: "Custom title",
         customMessage: "Custom message"
     )
     let unavailable = BetaScreenshotGuidance.make(
-        notificationConversationStarted: false,
+        notificationConversationExpected: false,
         notificationMode: .onScreenshot,
         customTitle: "Custom title",
         customMessage: "Custom message"
     )
     let disabled = BetaScreenshotGuidance.make(
-        notificationConversationStarted: false,
+        notificationConversationExpected: false,
         notificationMode: .disabled,
         customTitle: "Custom title",
         customMessage: "Custom message"
