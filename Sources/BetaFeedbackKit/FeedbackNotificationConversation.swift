@@ -13,8 +13,8 @@ public enum BetaFeedbackNotificationMode: Sendable, Equatable {
     /// Keep the existing screenshot guidance and feedback sheet behavior.
     case disabled
 
-    /// On iOS 27 or later, ask for feedback in notifications and prepare a report after
-    /// one to four tester responses. Earlier systems keep the existing screenshot flow.
+    /// On iOS 27 or later, ask for feedback in notifications and optionally ask one
+    /// follow-up question. Earlier systems keep the existing screenshot flow.
     case onScreenshot
 }
 
@@ -78,7 +78,10 @@ struct BetaFeedbackConversationSnapshot: Sendable, Codable, Equatable {
 }
 
 struct BetaFeedbackConversationRecord: Sendable, Codable, Equatable {
-    static let maximumResponseCount = 4
+    /// The original feedback plus at most one answer to a generated follow-up.
+    static let maximumResponseCount = 2
+    /// Keeps responses from already-delivered notifications routable after upgrading.
+    static let legacyMaximumRoutableResponseCount = 4
 
     let id: UUID
     let createdAt: Date
@@ -195,6 +198,29 @@ final class UserDefaultsFeedbackConversationStore: BetaFeedbackConversationStori
     }
 }
 
+extension BetaContentViewModel {
+    @MainActor
+    func isCurrentFeedbackConversation(_ record: BetaFeedbackConversationRecord) -> Bool {
+        feedbackConversationStore.load()?.id == record.id
+    }
+
+    @MainActor
+    @discardableResult
+    func saveFeedbackConversationIfCurrent(_ record: BetaFeedbackConversationRecord) -> Bool {
+        guard isCurrentFeedbackConversation(record) else { return false }
+        feedbackConversationStore.save(record)
+        return true
+    }
+
+    @MainActor
+    @discardableResult
+    func clearFeedbackConversationIfCurrent(_ record: BetaFeedbackConversationRecord) -> Bool {
+        guard isCurrentFeedbackConversation(record) else { return false }
+        feedbackConversationStore.clear()
+        return true
+    }
+}
+
 struct BetaFeedbackNotificationEnvelope: Sendable, Equatable {
     let conversationID: UUID
     let responseNumber: Int
@@ -212,7 +238,7 @@ struct BetaFeedbackNotificationEnvelope: Sendable, Equatable {
               let idValue = userInfo[BetaFeedbackNotificationIdentifiers.conversationIDKey] as? String,
               let id = UUID(uuidString: idValue),
               let responseNumber = userInfo[BetaFeedbackNotificationIdentifiers.turnKey] as? Int,
-              (1...BetaFeedbackConversationRecord.maximumResponseCount).contains(responseNumber) else {
+              (1...BetaFeedbackConversationRecord.legacyMaximumRoutableResponseCount).contains(responseNumber) else {
             return nil
         }
         self.conversationID = id
@@ -302,7 +328,7 @@ public extension BetaContentViewModel {
     /// Starts the iOS 27 notification conversation immediately.
     ///
     /// This is useful for a host app's debug menu or a custom screenshot route. The normal
-    /// `.onScreenshot` mode calls it automatically after a screenshot notification.
+    /// `.onScreenshot` mode calls it after the screenshot moves the app into the background.
     @MainActor
     @discardableResult
     func startFeedbackNotificationConversation() async -> Bool {
@@ -312,19 +338,7 @@ public extension BetaContentViewModel {
         }
         guard #available(iOS 27.0, *) else { return false }
 
-        let status = await authorizationStatus()
-        let isAuthorized: Bool
-        switch status {
-        case .authorized, .provisional, .ephemeral:
-            isAuthorized = true
-        case .notDetermined:
-            isAuthorized = await requestAuthorization()
-        case .denied:
-            isAuthorized = false
-        @unknown default:
-            isAuthorized = false
-        }
-        guard isAuthorized else {
+        guard await ensureFeedbackNotificationAuthorization() else {
             AnalyticsManager.logEvent("TestFlight.Feedback.ConversationUnavailable", info: [
                 "reason": "notification_authorization"
             ])
@@ -360,15 +374,20 @@ public extension BetaContentViewModel {
         activeConversationScreenshot = feedbackScreenshotProvider?().map { (record.id, $0) }
 
         do {
-            try await schedule(record: record, delay: 2)
+            try await schedule(record: record, delay: BetaFeedbackNotificationTiming.initialDelay)
             betaFeedbackConversationLogger.info("Scheduled initial feedback notification")
             AnalyticsManager.logEvent("TestFlight.Feedback.ConversationStarted", info: [
                 "source": "screenshot"
             ])
             return true
         } catch {
-            feedbackConversationStore.clear()
-            activeConversationScreenshot = nil
+            guard isCurrentFeedbackConversation(record) else {
+                betaFeedbackConversationLogger.notice(
+                    "Superseded initial notification work with a newer conversation"
+                )
+                return feedbackConversationStore.load() != nil
+            }
+            clearFeedbackConversation(ifCurrent: record)
             AnalyticsManager.logEvent("TestFlight.Feedback.ConversationUnavailable", info: [
                 "reason": "notification_schedule"
             ])
@@ -447,6 +466,13 @@ public extension BetaContentViewModel {
             return true
         }
 
+        // A previous package revision could have already scheduled another question.
+        // Complete with the first clarification instead of reviving that older flow.
+        if record.status != .completed, record.reachedResponseLimit {
+            await completeFeedbackConversation(record, outcome: "response_limit_migrated")
+            return true
+        }
+
         guard record.status == .awaitingResponse,
               record.pendingRequestID == response.requestIdentifier,
               record.expectedResponseNumber == responseNumber else {
@@ -502,7 +528,9 @@ public extension BetaContentViewModel {
                         "Restored feedback notification after default tap"
                     )
                 } catch {
-                    presentTestFlightFeedbackPrompt()
+                    if isCurrentFeedbackConversation(record) {
+                        presentTestFlightFeedbackPrompt()
+                    }
                 }
             }
         case .ignore:
@@ -539,6 +567,10 @@ public extension BetaContentViewModel {
             latestFeedbackReport = report
             return
         }
+        if record.reachedResponseLimit {
+            await completeFeedbackConversation(record, outcome: "response_limit_migrated")
+            return
+        }
         if record.status == .processing {
             // An app can be suspended after persisting a response but before model analysis.
             // Resuming never needs the optional image; all textual/state context is durable.
@@ -557,7 +589,7 @@ public extension BetaContentViewModel {
                 if record.hasAtLeastOneResponse {
                     await completeFeedbackConversation(record, outcome: "resume_schedule_failed")
                 } else {
-                    feedbackConversationStore.clear()
+                    clearFeedbackConversation(ifCurrent: record)
                 }
             }
         }
@@ -582,8 +614,12 @@ private extension BetaContentViewModel {
     @MainActor
     func processFeedbackConversation(_ persistedRecord: BetaFeedbackConversationRecord) async {
         var record = persistedRecord
+        guard isCurrentFeedbackConversation(record) else {
+            betaFeedbackConversationLogger.notice("Discarded superseded model work")
+            return
+        }
         guard let input = record.analysisInput() else {
-            feedbackConversationStore.clear()
+            clearFeedbackConversation(ifCurrent: record)
             return
         }
 
@@ -600,6 +636,14 @@ private extension BetaContentViewModel {
             return
         }
 
+        if input.latestResponseRepeatsEarlierResponse {
+            betaFeedbackConversationLogger.info(
+                "Tester repeated an earlier response; completing without another question"
+            )
+            await completeFeedbackConversation(record, outcome: "repeated_response")
+            return
+        }
+
         guard feedbackClarificationMode == .onDevice,
               #available(iOS 27.0, *) else {
             await completeFeedbackConversation(record, outcome: "model_disabled")
@@ -610,10 +654,15 @@ private extension BetaContentViewModel {
             let screenshot = activeConversationScreenshot?.id == record.id
                 ? activeConversationScreenshot?.image
                 : nil
-            guard let result = try await feedbackConversationAnalyzer.analyzeConversation(
+            let result = try await feedbackConversationAnalyzer.analyzeConversation(
                 input,
                 screenshot: screenshot
-            ) else {
+            )
+            guard isCurrentFeedbackConversation(record) else {
+                betaFeedbackConversationLogger.notice("Discarded superseded model result")
+                return
+            }
+            guard let result else {
                 betaFeedbackConversationLogger.notice("Foundation Models unavailable; finalizing feedback")
                 await completeFeedbackConversation(record, outcome: "model_unavailable")
                 return
@@ -630,7 +679,10 @@ private extension BetaContentViewModel {
             )
 
             record.awaitNextQuestion(nextQuestion)
-            feedbackConversationStore.save(record)
+            guard saveFeedbackConversationIfCurrent(record) else {
+                betaFeedbackConversationLogger.notice("Discarded superseded follow-up work")
+                return
+            }
             do {
                 try await schedule(record: record, delay: 1)
                 betaFeedbackConversationLogger.info(
@@ -644,8 +696,14 @@ private extension BetaContentViewModel {
                 await completeFeedbackConversation(record, outcome: "followup_schedule_failed")
             }
         } catch is CancellationError {
-            // The processing state is already durable and setup() will resume it.
-            betaFeedbackConversationLogger.notice("Model processing cancelled; durable response will resume")
+            if isCurrentFeedbackConversation(record) {
+                // The processing state is already durable and setup() will resume it.
+                betaFeedbackConversationLogger.notice(
+                    "Model processing cancelled; durable response will resume"
+                )
+            } else {
+                betaFeedbackConversationLogger.notice("Discarded superseded cancellation")
+            }
         } catch {
 #if DEBUG
             print("[BetaFeedbackKitLLM][conversation.error] \(String(reflecting: error))")
@@ -663,6 +721,10 @@ private extension BetaContentViewModel {
         outcome: String
     ) async {
         var record = persistedRecord
+        guard isCurrentFeedbackConversation(record) else {
+            betaFeedbackConversationLogger.notice("Discarded superseded completion work")
+            return
+        }
         guard let input = record.analysisInput() else { return }
         let finalAnalysis = record.analysis.map {
             BetaFeedbackClarificationAnalysis(
@@ -684,7 +746,10 @@ private extension BetaContentViewModel {
             diagnosticContext: input.diagnosticContext
         )
         record.complete(with: report)
-        feedbackConversationStore.save(record)
+        guard saveFeedbackConversationIfCurrent(record) else {
+            betaFeedbackConversationLogger.notice("Discarded superseded report work")
+            return
+        }
         latestFeedbackReport = report
         testFlightFeedbackAnswer = report.originalFeedback
         testFlightFeedbackQuestionId = report.questionID
@@ -695,6 +760,7 @@ private extension BetaContentViewModel {
 
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [record.pendingRequestID])
+        center.removeDeliveredNotifications(withIdentifiers: [record.pendingRequestID])
         do {
             try await center.add(
                 BetaFeedbackNotificationFactory.completionRequest(
@@ -702,6 +768,12 @@ private extension BetaContentViewModel {
                     conversationID: record.id
                 )
             )
+            if !isCurrentFeedbackConversation(record) {
+                let completionID = BetaFeedbackNotificationIdentifiers
+                    .completionRequestIdentifier(for: record.id)
+                center.removePendingNotificationRequests(withIdentifiers: [completionID])
+                center.removeDeliveredNotifications(withIdentifiers: [completionID])
+            }
         } catch {
             // The report remains persisted and available even if the confirmation cannot appear.
         }
@@ -720,6 +792,19 @@ private extension BetaContentViewModel {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [record.pendingRequestID])
         try await center.add(BetaFeedbackNotificationFactory.request(for: record, delay: delay))
+        guard isCurrentFeedbackConversation(record) else {
+            center.removePendingNotificationRequests(withIdentifiers: [record.pendingRequestID])
+            center.removeDeliveredNotifications(withIdentifiers: [record.pendingRequestID])
+            throw CancellationError()
+        }
+    }
+
+    @MainActor
+    func clearFeedbackConversation(ifCurrent record: BetaFeedbackConversationRecord) {
+        guard clearFeedbackConversationIfCurrent(record) else { return }
+        if activeConversationScreenshot?.id == record.id {
+            activeConversationScreenshot = nil
+        }
     }
 
     @MainActor

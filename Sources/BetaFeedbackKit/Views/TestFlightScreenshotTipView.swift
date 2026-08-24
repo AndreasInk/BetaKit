@@ -67,7 +67,7 @@ struct TestFlightScreenshotTipView: View {
 
     private var nextStepText: String {
         if vm.feedbackNotificationMode == .onScreenshot {
-            "Press and hold the notification, then tap Reply. The app may ask a few short questions to better understand your feedback before preparing a report for TestFlight."
+            "Press and hold the notification, then tap Reply. The app may ask one optional follow-up before preparing a report for TestFlight."
         } else {
             "After the screenshot, you’ll see the iOS preview with share options."
         }

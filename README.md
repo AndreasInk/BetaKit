@@ -1,10 +1,10 @@
 # BetaFeedbackKit
 
-BetaFeedbackKit turns vague TestFlight screenshots into structured, developer-ready reports without a backend or bug form. Testers do less work; you get their original words, targeted follow-ups, and relevant app context.
+BetaFeedbackKit turns vague TestFlight screenshots into structured, developer-ready reports without a backend or bug form. Testers do less work; you get their original words, one targeted follow-up, and relevant app context.
 
 It can:
 - show lightweight screenshot guidance
-- ask up to three short follow-up questions on-device
+- ask at most one short follow-up question on-device
 - add app, device, and developer-provided context
 - copy the finished report for TestFlight
 
@@ -13,7 +13,7 @@ It can:
 ```mermaid
 flowchart LR
     A[Take a screenshot] --> B[Reply to the notification]
-    B --> C[Answer up to 3 follow-ups]
+    B --> C[Answer one optional follow-up]
     C --> D[Paste the report into TestFlight]
 ```
 
@@ -67,18 +67,18 @@ struct ContentView: View {
 }
 ```
 
-`feedbackClarificationMode: .onDevice` lets Apple's on-device model ask a follow-up in the feedback sheet. `feedbackNotificationMode: .onScreenshot` starts the multi-turn notification flow after a screenshot. Both are opt-in.
+`feedbackClarificationMode: .onDevice` lets Apple's on-device model ask one follow-up in the feedback sheet. `feedbackNotificationMode: .onScreenshot` starts the notification flow after a screenshot. Both are opt-in.
 
-Use `domain_context` for a short, factual explanation of app-specific terminology or product
-relationships that should focus the follow-up. It is passed to the on-device prompt as untrusted
-data: it can disambiguate the tester's words, but it does not override them. Do not include
-personal data, secrets, tokens, private URLs, or speculative causes.
+Use `feedbackContextProvider` to include short, factual app context in the developer-facing
+report. This context is not sent to the on-device model. Do not include personal data, secrets,
+tokens, private URLs, or speculative causes.
 
 ## Notification feedback on iOS 27
 
 - A short popover beside the screenshot preview shows the current screen or feature when supplied.
+- Opening the system screenshot preview backgrounds the app; BetaFeedbackKit detects that transition and schedules the first notification for one second later.
 - The first notification asks for one text reply.
-- The on-device model may ask up to three short follow-ups. “I don’t know” ends that line of questioning.
+- The on-device model may ask one short follow-up. After the tester answers or skips it, the report is complete.
 - With pasteboard export enabled, the finished report is copied and the tester is guided back to TestFlight to paste it.
 
 For example:
@@ -135,7 +135,7 @@ On older systems or without notification access, BetaFeedbackKit falls back to n
 ## Privacy
 
 - Analysis stays on-device with no backend, API key, account, or external model provider. Active conversations remain in the host app's `UserDefaults` for up to 24 hours; an optional app-rendered screenshot stays in memory only.
-- Notification `userInfo` contains routing IDs only, while visible questions may reflect supplied feedback or context. Analytics contain flow metadata, never tester responses; do not supply personal data, tokens, or private URLs as context.
+- Notification `userInfo` contains routing IDs only, while visible questions may reflect supplied feedback or the optional in-memory screenshot. Analytics contain flow metadata, never tester responses; do not supply personal data, tokens, or private URLs as context.
 
 ## Advanced options
 

@@ -20,7 +20,7 @@ struct BetaScreenshotGuidance: Equatable {
         if notificationConversationStarted {
             return Self(
                 title: "Tell me what you noticed",
-                message: "Press and hold the notification, then tap Reply. Answer a few short questions to help improve the app."
+                message: "Press and hold the notification, then tap Reply. The app may ask one optional follow-up to help improve the app."
             )
         }
         if notificationMode == .onScreenshot {
