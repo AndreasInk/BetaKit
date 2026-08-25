@@ -386,7 +386,7 @@ private struct FeedbackInitialActions: View {
             if isAnalyzing {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text("Checking whether one detail would help…")
+                    Text("Checking whether one detail would help...")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

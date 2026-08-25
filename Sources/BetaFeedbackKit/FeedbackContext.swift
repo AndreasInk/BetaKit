@@ -5,7 +5,7 @@ import SwiftUI
 import StateReporting
 #endif
 
-#if os(iOS) && canImport(MetricKit)
+#if os(iOS) && canImport(MetricKit) && canImport(StateReporting)
 import MetricKit
 #endif
 
@@ -123,7 +123,7 @@ protocol FeedbackDiagnosticMonitoring {
     func stop()
 }
 
-#if os(iOS) && canImport(MetricKit)
+#if os(iOS) && canImport(MetricKit) && canImport(StateReporting)
 @available(iOS 27.0, *)
 private final class MetricKitObservation: @unchecked Sendable {
     let manager: MetricManager
@@ -144,7 +144,7 @@ final class OnDeviceFeedbackDiagnosticMonitor: FeedbackDiagnosticMonitoring {
     private var configuredDomains: Set<String> = []
     private var evidence: [BetaFeedbackDiagnosticEvidence] = []
 
-    #if os(iOS) && canImport(MetricKit)
+    #if os(iOS) && canImport(MetricKit) && canImport(StateReporting)
     private var observation: AnyObject?
     #endif
 
@@ -155,7 +155,7 @@ final class OnDeviceFeedbackDiagnosticMonitor: FeedbackDiagnosticMonitoring {
             return
         }
 
-        #if os(iOS) && canImport(MetricKit)
+        #if os(iOS) && canImport(MetricKit) && canImport(StateReporting)
         if #available(iOS 27.0, *) {
             startAvailable(stateDomains: logicalDomains)
         } else {
@@ -170,7 +170,7 @@ final class OnDeviceFeedbackDiagnosticMonitor: FeedbackDiagnosticMonitoring {
         matching states: [BetaFeedbackState],
         around feedbackDate: Date
     ) -> BetaFeedbackDiagnosticContext {
-        #if os(iOS) && canImport(MetricKit)
+        #if os(iOS) && canImport(MetricKit) && canImport(StateReporting)
         if #available(iOS 27.0, *) {
             return availableContext(matching: states, around: feedbackDate)
         }
@@ -181,7 +181,7 @@ final class OnDeviceFeedbackDiagnosticMonitor: FeedbackDiagnosticMonitoring {
     }
 
     func stop() {
-        #if os(iOS) && canImport(MetricKit)
+        #if os(iOS) && canImport(MetricKit) && canImport(StateReporting)
         if #available(iOS 27.0, *) {
             stopAvailable()
         }
@@ -224,7 +224,7 @@ enum BetaDiagnosticCorrelation {
     }
 }
 
-#if os(iOS) && canImport(MetricKit)
+#if os(iOS) && canImport(MetricKit) && canImport(StateReporting)
 @available(iOS 27.0, *)
 private extension OnDeviceFeedbackDiagnosticMonitor {
     func startAvailable(stateDomains logicalDomains: Set<String>) {

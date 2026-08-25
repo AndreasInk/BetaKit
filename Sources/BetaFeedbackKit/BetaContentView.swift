@@ -19,14 +19,14 @@ struct BetaScreenshotGuidance: Equatable {
     ) -> Self {
         if notificationConversationExpected {
             return Self(
-                title: "Tell me what you noticed",
-                message: "Press and hold the notification, then tap Reply. The app may ask one optional follow-up to help improve the app."
+                title: "What feedback do you have?",
+                message: "Tap the screenshot thumbnail. Then press and hold the notification, then tap Reply. The app may ask one optional follow-up to help improve the app."
             )
         }
         if notificationMode == .onScreenshot {
             return Self(
                 title: "Share through TestFlight",
-                message: "Tap the screenshot preview, then choose Share Beta Feedback."
+                message: "Tap the screenshot preview, tap the checkmark, then choose Share Beta Feedback."
             )
         }
         return Self(title: customTitle, message: customMessage)

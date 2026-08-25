@@ -17,6 +17,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "BetaFeedbackKit"
                BuildableName = "BetaFeedbackKit"
+               BlueprintName = "BetaFeedbackKit"
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
@@ -35,6 +36,17 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "BetaFeedbackKitTests"
                BuildableName = "BetaFeedbackKitTests"
+               BlueprintName = "BetaFeedbackKitTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "BetaFeedbackKitPublicAPITests"
+               BuildableName = "BetaFeedbackKitPublicAPITests"
+               BlueprintName = "BetaFeedbackKitPublicAPITests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>
@@ -63,6 +75,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "BetaFeedbackKit"
             BuildableName = "BetaFeedbackKit"
+            BlueprintName = "BetaFeedbackKit"
             ReferencedContainer = "container:">
          </BuildableReference>
       </MacroExpansion>

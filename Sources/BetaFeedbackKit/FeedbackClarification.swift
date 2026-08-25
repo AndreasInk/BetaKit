@@ -372,8 +372,7 @@ private extension OnDeviceFeedbackAnalyzer {
 #endif
         let response = try await session.respond(
             to: prompt,
-            generating: GeneratedFeedbackAnalysis.self,
-            options: GenerationOptions(samplingMode: .greedy)
+            generating: GeneratedFeedbackAnalysis.self
         )
 #if DEBUG
         print(response.content.debugLog(label: "single.raw"))
@@ -390,24 +389,12 @@ private extension OnDeviceFeedbackAnalyzer {
         guard model.availability == .available else { return nil }
 
         let instructions = FeedbackClarificationPrompt.instructions
-        let supportsReasoning = model.capabilities.contains(.reasoning)
-        let session: LanguageModelSession
-        if supportsReasoning {
-            let profile = LanguageModelSession.Profile {
-                Instructions(instructions)
-            }
-            .model(model)
-            .samplingMode(.greedy)
-            .reasoningLevel(.moderate)
-            session = LanguageModelSession(profile: profile)
-        } else {
-            session = LanguageModelSession(model: model, instructions: instructions)
-        }
+        let session = LanguageModelSession(model: model, instructions: instructions)
 
         let prompt = FeedbackAnalysisPrompt.make(from: input)
 #if DEBUG
         print("[BetaFeedbackKitLLM][conversation][prompt]\n\(prompt)")
-        print("[BetaFeedbackKitLLM][conversation.context] screenshotAttached=\(screenshot != nil) reasoningSupported=\(supportsReasoning)")
+        print("[BetaFeedbackKitLLM][conversation.context] screenshotAttached=\(screenshot != nil)")
 #endif
         let response: LanguageModelSession.Response<GeneratedFeedbackAnalysis>
         if let screenshot {
@@ -415,19 +402,24 @@ private extension OnDeviceFeedbackAnalyzer {
                 screenshot,
                 maximumDimension: 1_024
             )
+            #if canImport(StateReporting)
             response = try await session.respond(
-                generating: GeneratedFeedbackAnalysis.self,
-                options: GenerationOptions(samplingMode: .greedy)
+                generating: GeneratedFeedbackAnalysis.self
             ) {
                 prompt
                 "Use the current-screen image as visible context."
                 Attachment(preparedScreenshot).label("current-screen")
             }
+            #else
+            response = try await session.respond(
+                to: prompt,
+                generating: GeneratedFeedbackAnalysis.self
+            )
+            #endif
         } else {
             response = try await session.respond(
                 to: prompt,
-                generating: GeneratedFeedbackAnalysis.self,
-                options: GenerationOptions(samplingMode: .greedy)
+                generating: GeneratedFeedbackAnalysis.self
             )
         }
 #if DEBUG

@@ -59,7 +59,7 @@ struct TestFlightScreenshotTipView: View {
 
     private var introText: String {
         if vm.feedbackNotificationMode == .onScreenshot {
-            "After your next screenshot, I’ll send a notification so you can tell me what you noticed."
+            "After your next screenshot, The app will send a notification so you can say what you noticed."
         } else {
             "When you take a screenshot, iOS lets you share beta feedback directly. I’ll send a reminder after your next screenshot in the app."
         }
@@ -67,7 +67,7 @@ struct TestFlightScreenshotTipView: View {
 
     private var nextStepText: String {
         if vm.feedbackNotificationMode == .onScreenshot {
-            "Press and hold the notification, then tap Reply. The app may ask one optional follow-up before preparing a report for TestFlight."
+            "Tap the screenshot thumbnail, then press and hold the notification, then tap Reply. The app may ask one optional follow-up before preparing a report for TestFlight."
         } else {
             "After the screenshot, you’ll see the iOS preview with share options."
         }
