@@ -328,7 +328,8 @@ public extension BetaContentViewModel {
     /// Starts the iOS 27 notification conversation immediately.
     ///
     /// This is useful for a host app's debug menu or a custom screenshot route. The normal
-    /// `.onScreenshot` mode calls it after the screenshot moves the app into the background.
+    /// `.onScreenshot` mode calls it after presenting screenshot guidance, and the request's
+    /// one-second trigger gives the tester time to read that guidance first.
     @MainActor
     @discardableResult
     func startFeedbackNotificationConversation() async -> Bool {

@@ -579,72 +579,52 @@ import Testing
     #expect(vm.feedbackNotificationMode == .disabled)
 }
 
-@Test func screenshotNotificationWaitsForANearbyBackgroundTransition() {
-    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
-    var gate = BetaScreenshotBackgroundLaunchGate()
+@Test func screenshotNotificationStartsAfterForegroundGuidanceWithoutBackgrounding() {
+    var gate = BetaScreenshotLaunchGate()
 
-    let launchedWithoutScreenshot = gate.consumeBackgroundTransition(
-        for: gate.currentScreenshotGeneration,
-        at: screenshotDate
+    let startedWithoutScreenshot = gate.consumeNotificationStart(
+        for: gate.currentScreenshotGeneration
     )
-    #expect(!launchedWithoutScreenshot)
+    #expect(!startedWithoutScreenshot)
 
-    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
+    let screenshotGeneration = gate.recordScreenshot()
 
     let presentedGuidance = gate.consumeGuidancePresentation(
         for: screenshotGeneration,
         isApplicationBackgrounded: false
     )
-    let launchedAfterBackground = gate.consumeBackgroundTransition(
-        for: screenshotGeneration,
-        at: screenshotDate.addingTimeInterval(1)
+    let startedAfterGuidance = gate.consumeNotificationStart(
+        for: screenshotGeneration
     )
-    let launchedTwice = gate.consumeBackgroundTransition(
-        for: screenshotGeneration,
-        at: screenshotDate.addingTimeInterval(2)
+    let startedTwice = gate.consumeNotificationStart(
+        for: screenshotGeneration
     )
     #expect(presentedGuidance)
-    #expect(launchedAfterBackground)
-    #expect(!launchedTwice)
+    #expect(startedAfterGuidance)
+    #expect(!startedTwice)
     #expect(BetaFeedbackNotificationTiming.initialDelay == 1)
 }
 
-@Test func staleScreenshotDoesNotLaunchANotificationWhenAppBackgroundsLater() {
-    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
-    var gate = BetaScreenshotBackgroundLaunchGate()
-    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
-
-    let launchedAfterStaleTransition = gate.consumeBackgroundTransition(
-        for: screenshotGeneration,
-        at: screenshotDate.addingTimeInterval(31)
-    )
-    #expect(!launchedAfterStaleTransition)
-    #expect(gate.screenshotCapturedAt == nil)
-}
-
 @Test func deniedNotificationPermissionCanDiscardPendingScreenshot() {
-    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
-    var gate = BetaScreenshotBackgroundLaunchGate()
-    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
+    var gate = BetaScreenshotLaunchGate()
+    let screenshotGeneration = gate.recordScreenshot()
 
     gate.discardScreenshot(for: screenshotGeneration)
-    let launchedAfterDenial = gate.consumeBackgroundTransition(
-        for: screenshotGeneration,
-        at: screenshotDate.addingTimeInterval(1)
+    let startedAfterDenial = gate.consumeNotificationStart(
+        for: screenshotGeneration
     )
     let presentedAfterDenial = gate.consumeGuidancePresentation(
         for: screenshotGeneration,
         isApplicationBackgrounded: false
     )
 
-    #expect(!launchedAfterDenial)
+    #expect(!startedAfterDenial)
     #expect(!presentedAfterDenial)
 }
 
-@Test func screenshotGuidanceDoesNotWaitForTheBackgroundNotificationFlow() {
-    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
-    var gate = BetaScreenshotBackgroundLaunchGate()
-    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
+@Test func screenshotGuidanceAndNotificationEachStartOnce() {
+    var gate = BetaScreenshotLaunchGate()
+    let screenshotGeneration = gate.recordScreenshot()
 
     let firstPresentation = gate.consumeGuidancePresentation(
         for: screenshotGeneration,
@@ -654,20 +634,18 @@ import Testing
         for: screenshotGeneration,
         isApplicationBackgrounded: false
     )
-    let launchedAfterBackground = gate.consumeBackgroundTransition(
-        for: screenshotGeneration,
-        at: screenshotDate.addingTimeInterval(1)
+    let startedNotification = gate.consumeNotificationStart(
+        for: screenshotGeneration
     )
 
     #expect(firstPresentation)
     #expect(!repeatedPresentation)
-    #expect(launchedAfterBackground)
+    #expect(startedNotification)
 }
 
 @Test func screenshotGuidanceIsNotDeferredAcrossABackgroundTransition() {
-    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
-    var gate = BetaScreenshotBackgroundLaunchGate()
-    let screenshotGeneration = gate.recordScreenshot(at: screenshotDate)
+    var gate = BetaScreenshotLaunchGate()
+    let screenshotGeneration = gate.recordScreenshot()
 
     let presentedWhileBackgrounded = gate.consumeGuidancePresentation(
         for: screenshotGeneration,
@@ -677,46 +655,40 @@ import Testing
         for: screenshotGeneration,
         isApplicationBackgrounded: false
     )
-    let launchedAfterBackground = gate.consumeBackgroundTransition(
-        for: screenshotGeneration,
-        at: screenshotDate.addingTimeInterval(1)
+    let startedNotification = gate.consumeNotificationStart(
+        for: screenshotGeneration
     )
 
     #expect(!presentedWhileBackgrounded)
     #expect(!presentedAfterForegrounding)
-    #expect(launchedAfterBackground)
+    #expect(startedNotification)
 }
 
 @Test func supersededScreenshotCannotConsumeTheLatestScreenshotWork() {
-    let screenshotDate = Date(timeIntervalSince1970: 1_700_000_000)
-    var gate = BetaScreenshotBackgroundLaunchGate()
-    let earlierGeneration = gate.recordScreenshot(at: screenshotDate)
-    let latestGeneration = gate.recordScreenshot(
-        at: screenshotDate.addingTimeInterval(0.1)
-    )
+    var gate = BetaScreenshotLaunchGate()
+    let earlierGeneration = gate.recordScreenshot()
+    let latestGeneration = gate.recordScreenshot()
 
     gate.discardScreenshot(for: earlierGeneration)
     let stalePresentation = gate.consumeGuidancePresentation(
         for: earlierGeneration,
         isApplicationBackgrounded: false
     )
-    let staleBackgroundLaunch = gate.consumeBackgroundTransition(
-        for: earlierGeneration,
-        at: screenshotDate.addingTimeInterval(1)
+    let staleNotificationStart = gate.consumeNotificationStart(
+        for: earlierGeneration
     )
     let latestPresentation = gate.consumeGuidancePresentation(
         for: latestGeneration,
         isApplicationBackgrounded: false
     )
-    let latestBackgroundLaunch = gate.consumeBackgroundTransition(
-        for: latestGeneration,
-        at: screenshotDate.addingTimeInterval(1)
+    let latestNotificationStart = gate.consumeNotificationStart(
+        for: latestGeneration
     )
 
     #expect(!stalePresentation)
-    #expect(!staleBackgroundLaunch)
+    #expect(!staleNotificationStart)
     #expect(latestPresentation)
-    #expect(latestBackgroundLaunch)
+    #expect(latestNotificationStart)
 }
 
 @Test func screenshotGuidanceFallsBackWithoutPromisingANotification() {
