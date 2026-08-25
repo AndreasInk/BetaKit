@@ -12,9 +12,10 @@ It can:
 
 ```mermaid
 flowchart LR
-    A[Take a screenshot] --> B[Reply to the notification]
-    B --> C[Answer one optional follow-up]
-    C --> D[Paste the report into TestFlight]
+    A[Take a screenshot] --> B[See screenshot guidance]
+    B --> C[Reply to the notification]
+    C --> D[Answer one optional follow-up]
+    D --> E[Paste the report into TestFlight]
 ```
 
 If notifications or the on-device model are unavailable, the flow shortens instead of failing.
@@ -67,7 +68,7 @@ struct ContentView: View {
 }
 ```
 
-`feedbackClarificationMode: .onDevice` lets Apple's on-device model ask one follow-up in the feedback sheet. `feedbackNotificationMode: .onScreenshot` starts the notification flow after a screenshot. Both are opt-in.
+`feedbackClarificationMode: .onDevice` lets Apple's on-device model ask one follow-up in the feedback sheet. `feedbackNotificationMode: .onScreenshot` starts the notification flow after a screenshot. Both are opt-in. Because the first notification arrives while the app is foregrounded, `.onScreenshot` also requires the `willPresent` delegate forwarding shown below.
 
 Use `feedbackContextProvider` to include short, factual app context in the developer-facing
 report. This context is not sent to the on-device model. Do not include personal data, secrets,
@@ -76,7 +77,7 @@ tokens, private URLs, or speculative causes.
 ## Notification feedback on iOS 27
 
 - A short popover beside the screenshot preview shows the current screen or feature when supplied.
-- Opening the system screenshot preview backgrounds the app; BetaFeedbackKit detects that transition and schedules the first notification for one second later.
+- BetaFeedbackKit starts the notification flow after showing that guidance; the first notification is scheduled for one second later without waiting for a background transition.
 - The first notification asks for one text reply.
 - The on-device model may ask one short follow-up. After the tester answers or skips it, the report is complete.
 - With pasteboard export enabled, the finished report is copied and the tester is guided back to TestFlight to paste it.
@@ -128,7 +129,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 }
 ```
 
-Set the delegate during app launch and keep the same `BetaContentViewModel` available to it. Foreground banners require the `willPresent` forwarding shown above.
+Set the delegate during app launch and keep the same `BetaContentViewModel` available to it. Foreground banners require the `willPresent` forwarding shown above; without it, iOS suppresses the one-second screenshot notification while your app is visible.
 
 On older systems or without notification access, BetaFeedbackKit falls back to normal TestFlight sharing; if only the model is unavailable, it prepares the tester's first response without follow-ups.
 

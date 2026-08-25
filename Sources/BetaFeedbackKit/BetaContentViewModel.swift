@@ -35,15 +35,15 @@ enum BetaFeedbackNotificationTiming {
     static let initialDelay: TimeInterval = 1
 }
 
-struct BetaScreenshotBackgroundLaunchGate {
-    private(set) var screenshotCapturedAt: Date?
-    private(set) var isGuidancePresentationPending = false
+struct BetaScreenshotLaunchGate {
     private(set) var currentScreenshotGeneration: UInt64 = 0
+    private var guidancePresentationGeneration: UInt64?
+    private var notificationStartGeneration: UInt64?
 
-    mutating func recordScreenshot(at date: Date = .now) -> UInt64 {
+    mutating func recordScreenshot() -> UInt64 {
         currentScreenshotGeneration &+= 1
-        screenshotCapturedAt = date
-        isGuidancePresentationPending = true
+        guidancePresentationGeneration = currentScreenshotGeneration
+        notificationStartGeneration = currentScreenshotGeneration
         return currentScreenshotGeneration
     }
 
@@ -53,29 +53,27 @@ struct BetaScreenshotBackgroundLaunchGate {
 
     mutating func discardScreenshot(for generation: UInt64) {
         guard isCurrent(generation) else { return }
-        screenshotCapturedAt = nil
-        isGuidancePresentationPending = false
+        guidancePresentationGeneration = nil
+        notificationStartGeneration = nil
     }
 
     mutating func consumeGuidancePresentation(
         for generation: UInt64,
         isApplicationBackgrounded: Bool
     ) -> Bool {
-        guard isCurrent(generation), isGuidancePresentationPending else { return false }
-        isGuidancePresentationPending = false
+        guard isCurrent(generation), guidancePresentationGeneration == generation else {
+            return false
+        }
+        guidancePresentationGeneration = nil
         return !isApplicationBackgrounded
     }
 
-    mutating func consumeBackgroundTransition(
-        for generation: UInt64,
-        at date: Date = .now,
-        maximumDelay: TimeInterval = 30
-    ) -> Bool {
-        guard isCurrent(generation), let screenshotCapturedAt else { return false }
-        self.screenshotCapturedAt = nil
-
-        let elapsed = date.timeIntervalSince(screenshotCapturedAt)
-        return elapsed >= 0 && elapsed <= maximumDelay
+    mutating func consumeNotificationStart(for generation: UInt64) -> Bool {
+        guard isCurrent(generation), notificationStartGeneration == generation else {
+            return false
+        }
+        notificationStartGeneration = nil
+        return true
     }
 }
 
@@ -156,9 +154,7 @@ public final class BetaContentViewModel {
     @ObservationIgnored var feedbackDiagnosticMonitor: any FeedbackDiagnosticMonitoring = OnDeviceFeedbackDiagnosticMonitor()
     @ObservationIgnored private var betaStateRegistrations: [String: [BetaFeedbackStateRegistration]] = [:]
     @ObservationIgnored private var screenshotObserverToken: BetaNotificationObserverToken?
-    @ObservationIgnored private var applicationBackgroundObserverToken: BetaNotificationObserverToken?
-    @ObservationIgnored private var screenshotBackgroundLaunchGate = BetaScreenshotBackgroundLaunchGate()
-    @ObservationIgnored private var screenshotNotificationAuthorizationGeneration: UInt64?
+    @ObservationIgnored private var screenshotLaunchGate = BetaScreenshotLaunchGate()
     #if os(iOS)
     @ObservationIgnored var activeConversationScreenshot: (id: UUID, image: CGImage)?
     #endif
@@ -251,10 +247,9 @@ public final class BetaContentViewModel {
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let screenshotGeneration = self.screenshotBackgroundLaunchGate.recordScreenshot()
-                    self.screenshotNotificationAuthorizationGeneration = nil
+                    let screenshotGeneration = self.screenshotLaunchGate.recordScreenshot()
                     betaFeedbackScreenshotLogger.info(
-                        "Screenshot captured; preparing foreground guidance and background notification"
+                        "Screenshot captured; preparing foreground guidance and delayed notification"
                     )
                     let authorizationStatus = await self.authorizationStatus()
                     if authorizationStatus == .notDetermined {
@@ -273,12 +268,12 @@ public final class BetaContentViewModel {
                             notificationConversationExpected: false,
                             for: screenshotGeneration
                         )
-                        self.screenshotBackgroundLaunchGate.discardScreenshot(
+                        self.screenshotLaunchGate.discardScreenshot(
                             for: screenshotGeneration
                         )
                         return
                     }
-                    guard self.screenshotBackgroundLaunchGate.isCurrent(screenshotGeneration) else {
+                    guard self.screenshotLaunchGate.isCurrent(screenshotGeneration) else {
                         betaFeedbackScreenshotLogger.info(
                             "Discarded superseded screenshot authorization result"
                         )
@@ -296,34 +291,12 @@ public final class BetaContentViewModel {
                         notificationConversationExpected: notificationConversationExpected,
                         for: screenshotGeneration
                     )
-                    if notificationConversationExpected {
-                        await self.registerFeedbackNotificationCategories()
-                    }
-                    guard self.screenshotBackgroundLaunchGate.isCurrent(screenshotGeneration) else {
-                        betaFeedbackScreenshotLogger.info(
-                            "Discarded superseded screenshot category registration"
-                        )
-                        return
-                    }
-                    self.screenshotNotificationAuthorizationGeneration = screenshotGeneration
-                    if UIApplication.shared.applicationState == .background {
-                        await self.startPendingScreenshotNotificationAfterBackground()
-                    }
+                    await self.startPendingScreenshotNotification(
+                        afterGuidanceFor: screenshotGeneration
+                    )
                 }
             }
             screenshotObserverToken = BetaNotificationObserverToken(token)
-        }
-        if applicationBackgroundObserverToken == nil {
-            let token = NotificationCenter.default.addObserver(
-                forName: UIApplication.didEnterBackgroundNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    await self?.startPendingScreenshotNotificationAfterBackground()
-                }
-            }
-            applicationBackgroundObserverToken = BetaNotificationObserverToken(token)
         }
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -451,14 +424,14 @@ public final class BetaContentViewModel {
     }
 
     #if os(iOS)
-    private func startPendingScreenshotNotificationAfterBackground() async {
-        guard let screenshotGeneration = screenshotNotificationAuthorizationGeneration,
-              screenshotBackgroundLaunchGate.consumeBackgroundTransition(
-                for: screenshotGeneration
-              ) else { return }
-        screenshotNotificationAuthorizationGeneration = nil
+    private func startPendingScreenshotNotification(
+        afterGuidanceFor screenshotGeneration: UInt64
+    ) async {
+        guard screenshotLaunchGate.consumeNotificationStart(
+            for: screenshotGeneration
+        ) else { return }
         betaFeedbackScreenshotLogger.info(
-            "App entered background after screenshot; starting notification flow"
+            "Starting screenshot notification flow with a \(BetaFeedbackNotificationTiming.initialDelay, privacy: .public)-second delivery delay"
         )
 
         let notificationConversationStarted: Bool
@@ -473,7 +446,7 @@ public final class BetaContentViewModel {
             Self.scheduleTestFlightScreenshotTipNotificationInternal()
             notificationConversationStarted = false
         }
-        if screenshotBackgroundLaunchGate.isCurrent(screenshotGeneration) {
+        if screenshotLaunchGate.isCurrent(screenshotGeneration) {
             screenshotNotificationConversationExpected = notificationConversationStarted
         }
     }
@@ -483,7 +456,7 @@ public final class BetaContentViewModel {
         for screenshotGeneration: UInt64
     ) {
         let isApplicationBackgrounded = UIApplication.shared.applicationState == .background
-        guard screenshotBackgroundLaunchGate.consumeGuidancePresentation(
+        guard screenshotLaunchGate.consumeGuidancePresentation(
             for: screenshotGeneration,
             isApplicationBackgrounded: isApplicationBackgrounded
         ) else {
