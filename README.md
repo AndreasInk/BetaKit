@@ -90,7 +90,7 @@ BetaFeedbackKit might ask:
 
 > “When you tapped Continue, did the screen stay the same, or did you see an error?”
 
-The original answer, clarification, and app context are kept in the final report.
+The original question, exact tester answer, clarification, and app context are kept in the final report. Model output is labeled as a generated issue category rather than presented as tester-authored fact.
 
 ### Forward notification responses
 
@@ -148,7 +148,9 @@ On older systems or without notification access, BetaFeedbackKit falls back to n
 
 ## Development
 
-Run `swift test` for deterministic coverage. Xcode 27 also runs the Apple Evaluations test, which scores clarification quality across text, conversation-history, and bundled screenshot fixtures using the on-device model.
+Run `swift build` and `swift test` for deterministic coverage. On Xcode 27, the Apple Evaluations suite checks the question contract and generated category across production-reachable text and bundled screenshot cases. Dedicated capture tests emit the real Apps Foundation Models subjects for separate tester- and developer-persona review; the app model does not judge its own output. The suite evaluates question quality under the current one-optional-follow-up contract; it does not score an ask-versus-stop decision that production does not make. Conversation lifecycle and prior-answer behavior remain deterministic tests because production allows only one model-generated follow-up.
+
+Use `BETA_FEEDBACK_EVAL_CASE_ID` or `BETA_FEEDBACK_EVAL_CASE_INDEX` to isolate a case, `BETA_FEEDBACK_EVAL_SCREENSHOTS_ONLY=1` for screenshot cases, and `BETA_FEEDBACK_EVAL_SHARD=1/2` to shard the corpus. Set `BETA_FEEDBACK_REQUIRE_MODEL_EVALS=1` in an environment with on-device model assets when an unscored model run must fail instead of reporting that the model evaluation was unavailable.
 
 ## License
 
